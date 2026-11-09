@@ -49,7 +49,19 @@ C:\age_project\
 └─ run_models.bat
 ```
 
-사용한 코드는 이 폴더의 [`code/`](code/)에 있습니다.
+사용한 코드는 이 폴더의 [`code/`](code/)에 있습니다. 이 폴더만으로 ResNet-50 학습·평가를 재현할 수 있습니다.
+
+| 파일 | 역할 |
+|---|---|
+| `common.py` | 나이대 정의, 모델 생성, 사진 변환(증강·정규화), 평가 지표 |
+| `make_split_csv.py` | 팀원이 나눈 `split_result_224` 폴더 → 학습용 CSV |
+| `step4_train.py` | 학습 (`--model resnet50`) |
+| `step5_evaluate.py` | 평가, 혼동 행렬·학습 곡선, 실험 비교표 |
+| `step6_gradcam.py` | Grad-CAM 열지도 |
+| `run_resnet50.bat` | ResNet-50 학습 + 검증 평가를 한 번에 실행 |
+| `requirements.txt` | 필요한 라이브러리 |
+
+> 실제 실험 때는 ResNet-50과 ConvNeXt-Tiny를 이어서 돌리는 `run_models.bat` 하나로 실행했습니다. 저장소 규칙(모델별 폴더 분리)에 맞춰 모델별 실행 파일로 나눠 두었습니다. 날짜별 작업 기록은 [`../개발일지/KIMDONGHWI`](../개발일지/KIMDONGHWI)에 있습니다.
 
 ---
 
