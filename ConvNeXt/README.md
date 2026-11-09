@@ -24,7 +24,20 @@
 
 ## 1. 실행 방법
 
-ResNet-50과 **같은 학습 코드**(`step4_train.py`)에서 모델 이름만 바꿔 실행했다. 데이터, 분리, 학습률, 증강, 손실 가중치, 에폭(최대 20), 배치(64), 조기 종료 조건이 모두 같다.
+ResNet-50과 **같은 학습 코드**(`step4_train.py`)에서 모델 이름만 바꿔 실행했다. 데이터, 분리, 학습률, 증강, 손실 가중치, 에폭(최대 20), 배치(64), 조기 종료 조건이 모두 같다. 이 폴더의 [`code/`](code/)만으로 ConvNeXt-Tiny 학습·평가를 재현할 수 있다.
+
+| 파일 | 역할 |
+|---|---|
+| `common.py` | 나이대 정의, 모델 생성, 사진 변환(증강·정규화), 평가 지표 |
+| `make_split_csv.py` | 팀원이 나눈 `split_result_224` 폴더 → 학습용 CSV |
+| `step4_train.py` | 학습 (`--model convnext_tiny`) |
+| `step5_evaluate.py` | 평가, 혼동 행렬·학습 곡선, 실험 비교표 |
+| `step6_gradcam.py` | Grad-CAM 열지도 |
+| `run_convnext.bat` | ConvNeXt-Tiny 학습 + 검증 평가를 한 번에 실행 |
+| `train_convnext.py` | 위 학습 설정을 ConvNeXt 전용 한 파일로 모은 버전 |
+| `requirements.txt` | 필요한 라이브러리 |
+
+날짜별 작업 기록은 [`../개발일지/KIMDONGHWI`](../개발일지/KIMDONGHWI)에 있다.
 
 ```
 python step4_train.py --name m_convnext --model convnext_tiny --train-csv splits_csv/train.csv --val-csv splits_csv/val.csv --image-root split_result_224 --epochs 20
@@ -48,7 +61,7 @@ target_layer = model.stages[-1]
 
 ### 2-1. 학습 시작
 
-ResNet-50이 조기 종료된 뒤 `run_models.bat`에 의해 ConvNeXt-Tiny 학습이 자동으로 시작됐다.
+ResNet-50이 조기 종료된 뒤, 두 모델을 이어서 돌리는 실행 파일(`run_models.bat`)에 의해 ConvNeXt-Tiny 학습이 자동으로 시작됐다.
 
 ![ConvNeXt 시작](images/01_convnext_start_download.png)
 
