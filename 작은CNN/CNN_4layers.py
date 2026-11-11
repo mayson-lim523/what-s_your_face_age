@@ -196,12 +196,13 @@ print(optimizer)                # 확인용: Adam 설정 (lr: 0.001, betas: (0.9
 # train_subset은 train_dataset을 가리키고 있어서, 원본의 transform만 바꾸면 부분집합에도 적용됨
 train_dataset.transform = val_transform
 
-NUM_EPOCHS = 100                    # 전체 데이터를 몇 번 반복해서 볼지. 과적합 테스트용 (본 학습은 팀원과 같은 20)
+from sklearn.metrics import f1_score     # macro-F1 계산용 
+NUM_EPOCHS = 5                    # 전체 데이터를 몇 번 반복해서 볼지. 과적합 테스트용 (본 학습은 팀원과 같은 20)
 SAVE_PATH = "small_cnn_best.pth"    # 가장 좋은 모델의 가중치를 저장할 파일 이름 (프로젝트 폴더에 생성)
 
-# 에폭마다 결과를 쌓아둘 딕셔너리. {이름표: 빈 리스트} 4개 → 4-5에서 학습 곡선 그릴 때 사용
-history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": []}
-best_val_acc = 0.0                  # 지금까지 가장 높았던 검증 정확도 (처음엔 0)
+history = {"train_loss": [], "train_acc": [], "val_loss": [], "val_acc": [],
+           "val_off1": [], "val_f1": []}          # 지표 2개 추가
+best_val_f1 = 0.0                                  # best_val_acc 대신
 
 # range(NUM_EPOCHS): 0, 1, ..., NUM_EPOCHS-1 → epoch 변수에 차례로 들어감
 for epoch in range(NUM_EPOCHS):
@@ -229,24 +230,34 @@ for epoch in range(NUM_EPOCHS):
     train_loss = running_loss / total              # 에폭 전체 평균 손실
     train_acc = correct / total                    # 에폭 전체 정확도 (0~1)
 
-    # ---------- 검증 ----------
-    model.eval()                    # 평가 모드: Dropout 꺼짐, BN은 학습 중 누적한 통계 사용
-    running_loss, correct, total = 0.0, 0, 0   # 검증용으로 다시 0으로 초기화
+        # ---------- 검증 ----------
+    model.eval()
+    running_loss, correct, total = 0.0, 0, 0
+    all_preds, all_labels = [], []                 # 이번 에폭의 예측·정답을 모을 빈 리스트
 
-    # torch.no_grad(): 이 블록 안에서는 기울기를 기록하지 않음 → 메모리 절약, 속도 향상
-    # 검증에서는 가중치를 바꾸면 안 되므로 zero_grad, backward, step이 없음
     with torch.no_grad():
-        for images, labels in val_loader:                     # 검증 배치 하나씩
-            images, labels = images.to(device), labels.to(device)   # 학습 루프와 같은 방식으로 GPU로
-            outputs = model(images)                           # 순전파만
-            loss = criterion(outputs, labels)                 # 손실 계산 (기록용)
+        for images, labels in val_loader:
+            images, labels = images.to(device), labels.to(device)
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            preds = outputs.argmax(dim=1)          # 예측 나이대 번호 (한 번만 계산해서 재사용)
 
-            running_loss += loss.item() * images.size(0)      # 학습 구간과 같은 방식으로 합계
-            correct += (outputs.argmax(dim=1) == labels).sum().item()   # 맞힌 개수
-            total += labels.size(0)                           # 본 사진 수
+            all_preds.append(preds.cpu())          # ⓐ sklearn은 GPU 텐서를 못 읽어요
+            all_labels.append(labels.cpu())        # ⓐ
 
-    val_loss = running_loss / total                # 검증 평균 손실
-    val_acc = correct / total                      # 검증 정확도
+            running_loss += loss.item() * images.size(0)
+            correct += (preds == labels).sum().item()
+            total += labels.size(0)
+
+    all_preds = torch.cat(all_preds)               # ⓑ 배치별 텐서 리스트 → 텐서 하나로 이어붙이기
+    all_labels = torch.cat(all_labels)             # ⓑ
+
+    val_loss = running_loss / total
+    val_acc = correct / total
+    val_off1 = ((all_preds - all_labels).abs() <= 1).float().mean().item()   # ⓒ ⓓ
+    val_f1 = f1_score(all_labels.numpy(), all_preds.numpy(),
+                      average="macro",               # ⓔ
+                      labels=list(range(NUM_CLASSES)), zero_division=0)
 
     # ---------- 기록 ----------
     # history["이름표"]: 해당 리스트를 꺼냄 / .append(값): 리스트 끝에 이번 에폭 값을 추가
@@ -254,19 +265,78 @@ for epoch in range(NUM_EPOCHS):
     history["train_acc"].append(train_acc)
     history["val_loss"].append(val_loss)
     history["val_acc"].append(val_acc)
+    history["val_off1"].append(val_off1)
+    history["val_f1"].append(val_f1)
+            
 
     # f"...{변수:형식}...": 변수 값을 문자열에 넣기
     #   {epoch+1:2d}: 정수를 2칸 폭으로 / {train_loss:.4f}: 소수점 4자리 / {train_acc:.3f}: 소수점 3자리
     print(f"Epoch {epoch+1:2d}/{NUM_EPOCHS} | "
           f"train loss {train_loss:.4f} acc {train_acc:.3f} | "
-          f"val loss {val_loss:.4f} acc {val_acc:.3f}")
+          f"val loss {val_loss:.4f} acc {val_acc:.3f} off1 {val_off1:.3f} F1 {val_f1:.3f}")
 
-    # ---------- 최고 모델 저장 ----------
-    if val_acc > best_val_acc:                     # 이번 검증 정확도가 지금까지 최고보다 높으면
-        best_val_acc = val_acc                     # 최고 기록 갱신
-        # torch.save(저장할 것, 파일 경로)
-        # model.state_dict(): 모델 전체가 아니라 가중치만 {층 이름: 값} 딕셔너리로 꺼냄
-        #   → 나중에 SmallCNN()을 새로 만들고 load_state_dict로 불러오면 됨. 이전 파일은 덮어씀
+    # ---------- 최고 모델 저장 (기준: macro-F1) ----------
+    if val_f1 > best_val_f1:                                  # ⓖ
+        best_val_f1 = val_f1
         torch.save(model.state_dict(), SAVE_PATH)
 
-print("best val acc:", best_val_acc)               # 학습이 모두 끝난 뒤 최고 검증 정확도 출력 (for문 밖)
+print("best val macro-F1:", best_val_f1)
+
+# 프로그램 4-5 학습 모델 시각화하기
+
+import matplotlib.pyplot as plt
+
+CLASS_NAMES = ["0-9", "10s", "20s", "30s", "40s", "50s", "60+"]   # 한글은 폰트 설정이 필요해서 영어로
+
+# ---------- 1부: 예측 샘플 ----------
+model.load_state_dict(torch.load(SAVE_PATH))   # 가장 좋았던 에폭의 가중치 불러오기
+model.eval()
+
+with torch.no_grad():
+    sample_images, sample_labels = next(iter(val_loader))                       # ① 어떤 loader?
+    preds = model(sample_images.to(device)).argmax(dim=1).cpu()         # ② GPU로 보내고 ③ 결과는 CPU로
+
+plt.figure(figsize=(12, 6))
+for i in range(8):
+    plt.subplot(2, 4, i+1)
+
+    img = sample_images[i].permute(1, 2, 0)       # ④ (3, H, W) → (H, W, 3)
+    img = img * torch.tensor(STD) + torch.tensor(MEAN)   # ⑤ 정규화 되돌리기
+    img = img.clamp(0, 1)
+    plt.imshow(img)
+
+    pred, true = preds[i].item(), sample_labels[i].item()
+    color = "green" if pred == true else "red"
+    plt.title(f"pred: {CLASS_NAMES[pred]} / true: {CLASS_NAMES[true]}", color=color, fontsize=9)
+    plt.axis('off')
+
+plt.tight_layout()
+plt.savefig("pred_samples.png", dpi=150)
+plt.show()
+
+# ---------- 2부: 학습 곡선 ----------
+epochs = range(1, len(history["train_loss"]) + 1)   # x축: 1, 2, ..., 100
+
+plt.figure(figsize=(12, 4))
+
+# 왼쪽: loss
+plt.subplot(1, 2, 1)                              # ①
+plt.plot(epochs, history["train_loss"], label="train")     # ②
+plt.plot(epochs, history["val_loss"], label="val")       # ③
+plt.xlabel("epoch")
+plt.ylabel("loss")
+plt.title("Loss")
+plt.legend()
+
+# 오른쪽: 정확도
+plt.subplot(1, 2, 2)                              # ④
+plt.plot(epochs, history["train_acc"], label="train")     # ⑤
+plt.plot(epochs, history["val_acc"], label="val")       # ⑥
+plt.xlabel("epoch")
+plt.ylabel("accuracy")
+plt.title("Accuracy")
+plt.legend()
+
+plt.tight_layout()
+plt.savefig("learning_curve.png", dpi=150)
+plt.show()
