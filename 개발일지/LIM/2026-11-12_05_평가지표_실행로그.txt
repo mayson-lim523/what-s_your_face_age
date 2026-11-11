@@ -1,0 +1,30 @@
+(.venv) PS C:\3th_project\whats_your_face_age> & 'c:\3th_project\whats_your_face_age\.venv\Scripts\python.exe' 'c:/3th_project/whats_your_face_age/models/CNN_4layers.py'
+using device: cuda
+{'0 9': 0, '10 19': 1, '20 29': 2, '30 39': 3, '40 49': 4, '50 59': 5, '60over': 6}
+71735 15288
+torch.Size([64, 3, 224, 224])
+tensor([5, 1, 3, 4, 0, 1, 5, 6, 4, 4])
+-0.2753112316131592 1.0818243026733398
+torch.Size([64, 7])
+390695
+CrossEntropyLoss()
+Adam (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    capturable: False
+    decoupled_weight_decay: False
+    differentiable: False
+    eps: 1e-08
+    foreach: None
+    fused: None
+    lr: 0.001
+    maximize: False
+    weight_decay: 0
+)
+Epoch  1/5 | train loss 2.0320 acc 0.180 | val loss 1.9711 acc 0.080 off1 0.170 F1 0.021
+Epoch  2/5 | train loss 1.7732 acc 0.280 | val loss 1.9756 acc 0.170 off1 0.420 F1 0.149
+Epoch  3/5 | train loss 1.6693 acc 0.370 | val loss 1.9776 acc 0.160 off1 0.500 F1 0.124
+Epoch  4/5 | train loss 1.5952 acc 0.390 | val loss 1.9812 acc 0.180 off1 0.520 F1 0.150
+Epoch  5/5 | train loss 1.5135 acc 0.410 | val loss 2.0029 acc 0.170 off1 0.450 F1 0.112
+best val macro-F1: 0.14976850994481278
