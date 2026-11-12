@@ -1,0 +1,32 @@
+(.venv) PS C:\3th_project\whats_your_face_age> & 'c:\3th_project\whats_your_face_age\.venv\Scripts\python.exe' 'c:/3th_project/whats_your_face_age/models/CNN_4layers.py'
+using device: cuda
+{'0 9': 0, '10 19': 1, '20 29': 2, '30 39': 3, '40 49': 4, '50 59': 5, '60over': 6}
+71735 15288
+torch.Size([64, 3, 224, 224])
+tensor([1, 3, 5, 3, 3, 3, 6, 2, 3, 6])
+-0.22881880402565002 1.1009052991867065
+torch.Size([64, 7])
+390695
+나이대별 사진 수: [11561.0, 12000.0, 12000.0, 12000.0, 12104.0, 6801.0, 5269.0]
+나이대별 손실 가중치: tensor([0.8864, 0.8540, 0.8540, 0.8540, 0.8467, 1.5068, 1.9449])
+Epoch  1/20 | train loss 1.8276 acc 0.251 | val loss 1.7167 acc 0.329 off1 0.573 F1 0.283 | 433초
+Epoch  2/20 | train loss 1.6702 acc 0.324 | val loss 1.8427 acc 0.277 off1 0.540 F1 0.269 | 346초
+Epoch  3/20 | train loss 1.5905 acc 0.353 | val loss 1.6547 acc 0.347 off1 0.606 F1 0.322 | 347초
+Epoch  4/20 | train loss 1.5411 acc 0.372 | val loss 1.4865 acc 0.407 off1 0.708 F1 0.382 | 320초
+Epoch  5/20 | train loss 1.4944 acc 0.391 | val loss 1.4769 acc 0.405 off1 0.701 F1 0.375 | 322초
+Epoch  6/20 | train loss 1.4566 acc 0.407 | val loss 1.4600 acc 0.397 off1 0.703 F1 0.359 | 323초
+Epoch  7/20 | train loss 1.4281 acc 0.414 | val loss 1.7411 acc 0.314 off1 0.616 F1 0.264 | 319초
+Epoch  8/20 | train loss 1.3953 acc 0.427 | val loss 1.3445 acc 0.456 off1 0.775 F1 0.445 | 319초
+Epoch  9/20 | train loss 1.3619 acc 0.443 | val loss 1.3342 acc 0.457 off1 0.778 F1 0.444 | 319초
+Epoch 10/20 | train loss 1.3452 acc 0.450 | val loss 1.3080 acc 0.474 off1 0.771 F1 0.455 | 320초
+Epoch 11/20 | train loss 1.3215 acc 0.456 | val loss 1.2637 acc 0.479 off1 0.803 F1 0.465 | 318초
+Epoch 12/20 | train loss 1.3035 acc 0.464 | val loss 1.2447 acc 0.491 off1 0.789 F1 0.462 | 319초
+Epoch 13/20 | train loss 1.2864 acc 0.467 | val loss 1.2746 acc 0.485 off1 0.798 F1 0.483 | 332초
+Epoch 14/20 | train loss 1.2687 acc 0.476 | val loss 1.2923 acc 0.471 off1 0.792 F1 0.473 | 346초
+Epoch 15/20 | train loss 1.2580 acc 0.480 | val loss 1.2376 acc 0.494 off1 0.787 F1 0.471 | 326초
+Epoch 16/20 | train loss 1.2449 acc 0.485 | val loss 1.2747 acc 0.488 off1 0.768 F1 0.464 | 320초
+Epoch 17/20 | train loss 1.2339 acc 0.488 | val loss 1.2157 acc 0.494 off1 0.800 F1 0.471 | 316초
+Epoch 18/20 | train loss 1.2232 acc 0.492 | val loss 1.2151 acc 0.501 off1 0.829 F1 0.496 | 319초
+Epoch 19/20 | train loss 1.2157 acc 0.495 | val loss 1.2357 acc 0.491 off1 0.778 F1 0.465 | 318초
+Epoch 20/20 | train loss 1.2039 acc 0.499 | val loss 1.3091 acc 0.470 off1 0.790 F1 0.480 | 322초
+best val macro-F1: 0.4962069012723938
