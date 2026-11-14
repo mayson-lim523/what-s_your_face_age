@@ -1,0 +1,12 @@
+# torch, torchvision 은 각자 환경(GPU)에 맞게 따로 설치한다 (Kaggle은 이미 설치돼 있음)
+timm
+pandas
+scikit-learn
+matplotlib
+tqdm
+pillow
+imagehash
+grad-cam
+gradio
+# facenet-pytorch 는 torch 버전을 바꾸지 않도록 따로 설치:
+#   pip install facenet-pytorch --no-deps
