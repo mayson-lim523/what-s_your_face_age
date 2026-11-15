@@ -164,7 +164,10 @@ def main():
         model.load_state_dict(ck["model"]); optimizer.load_state_dict(ck["optimizer"])
         scheduler.load_state_dict(ck["scheduler"]); scaler.load_state_dict(ck["scaler"])
         start, best_f1, bad, history = ck["epoch"] + 1, ck["best_f1"], ck["bad"], ck["history"]
-        print(f"{start}에폭부터 이어서 학습")
+        print(f"{start}에폭까지 완료된 상태를 불러옴 → {start + 1}에폭부터 이어서 학습")
+        if bad >= a.patience:  # 이미 조기 종료 조건을 채운 상태라면 더 학습하지 않음
+            print(f"이미 조기 종료된 학습입니다 (검증 F1이 {bad}번 연속 오르지 않음). 더 학습하려면 --patience 값을 키우세요.")
+            return
 
     # ---- 학습 반복
     for epoch in range(start, a.epochs):
