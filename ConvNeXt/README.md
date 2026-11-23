@@ -13,14 +13,17 @@
 
 ## 결과 요약 (검증 데이터 15,288장)
 
-| 모델 | 정확도 | 한 칸 차이 정확도 | macro-F1 | 가장 좋았던 에폭 | 조기 종료 |
-|---|---:|---:|---:|---:|---:|
-| ResNet-50 | 61.9% | 92.9% | 0.615 | 8 | 12에폭 |
-| **ConvNeXt-Tiny** | **65.2%** | **95.1%** | **0.648** | 7 | 11에폭 |
+| 모델 | 사전학습 가중치 | 증강 | 정확도 | 한 칸 차이 정확도 | macro-F1 | 가장 좋았던 에폭 | 조기 종료 |
+|---|---|---|---:|---:|---:|---:|---:|
+| ResNet-50 | ImageNet-1k | 있음 | 61.9% | 92.9% | 0.615 | 8 | 12에폭 |
+| ConvNeXt-Tiny (참고) | ImageNet-12k → 1k | 있음 | 65.2% | 95.1% | 0.648 | 7 | 11에폭 |
+| **ConvNeXt-Tiny** | **ImageNet-1k** | 있음 | **64.5%** | **94.6%** | **0.642** | 3 | 7에폭 |
+| ConvNeXt-Tiny | ImageNet-1k | **없음** | 64.0% | 94.8% | 0.640 | 3 | 없음 (20에폭) |
 
-**ConvNeXt-Tiny가 세 가지 지표 모두에서 더 높았고, 7개 나이대 전부에서 더 잘 맞혔습니다. 다만 과적합은 더 빠르고 크게 나타났습니다.**
-
-조기 종료가 적절했는지 확인하려고 두 모델을 **20에폭까지 추가로 학습**해 봤지만, 최고 성능은 바뀌지 않았습니다(3-3 참고).
+- **사전학습 조건을 ResNet-50과 같은 ImageNet-1k로 맞춰도 ConvNeXt-Tiny가 모든 지표에서 더 높았습니다** (macro-F1 0.615 → 0.642). 처음 실험은 timm 기본 가중치 때문에 ConvNeXt만 더 큰 데이터(ImageNet-12k)로 사전학습된 가중치를 썼는데, 그 효과는 0.006으로 작았습니다(2-5, 3-4).
+- **2026-11-23부터 ConvNeXt-Tiny는 ImageNet-1k 가중치(`convnext_tiny.fb_in1k`) 결과를 기준으로 합니다.** 12k→1k 결과(`m_convnext`)는 참고용으로 남겨 둡니다.
+- **증강 유무는 ConvNeXt의 최고 성능에 거의 영향을 주지 않았습니다** (0.642 vs 0.640). 다만 증강이 없으면 과적합이 훨씬 빨리 왔습니다(2-6, 3-6).
+- 조기 종료가 적절했는지 확인하려고 20에폭까지 추가로 학습해 봤지만, 최고 성능은 바뀌지 않았습니다(3-3).
 
 ## 모델의 역할
 
@@ -41,6 +44,8 @@ ResNet-50과 **같은 학습 코드**(`step4_train.py`)를 쓰고, 모델 이름
 | `step5_evaluate.py` | 평가, 혼동 행렬·학습 곡선 그리기, 실험 비교표 만들기 |
 | `step6_gradcam.py` | Grad-CAM 열지도 만들기 |
 | `run_convnext.bat` | ConvNeXt-Tiny 학습과 검증 평가를 한 번에 실행 |
+| `run_augment_compare.bat` | ImageNet-1k 가중치로 학습(증강 있음/없음) → 평가 → 비교 그래프까지 한 번에 실행 |
+| `plot_history_compare.py` | 두 실험의 `history.csv`를 나란히 그려 비교 (정확도, 검증 손실, 검증 macro-F1) |
 | `train_convnext.py` | 위와 같은 학습 설정을 ConvNeXt 전용 파일 하나로 모은 버전 |
 | `requirements.txt` | 필요한 라이브러리 목록 |
 
@@ -48,6 +53,12 @@ ResNet-50과 **같은 학습 코드**(`step4_train.py`)를 쓰고, 모델 이름
 
 ```
 python step4_train.py --name m_convnext --model convnext_tiny --train-csv splits_csv/train.csv --val-csv splits_csv/val.csv --image-root split_result_224 --epochs 20
+```
+
+ResNet-50과 사전학습 조건을 맞춘 실험(현재 기준)은 모델 이름 뒤에 가중치 이름만 붙여서 실행합니다.
+
+```
+python step4_train.py --name m_convnext_in1k --model convnext_tiny.fb_in1k --train-csv splits_csv/train.csv --val-csv splits_csv/val.csv --image-root split_result_224 --epochs 20
 ```
 
 ConvNeXt 부분만 한 파일로 모은 코드는 [`code/train_convnext.py`](code/train_convnext.py)입니다(설정은 위 명령과 같습니다).
@@ -129,11 +140,73 @@ python step5_evaluate.py --summary results --tag val
 | base_resnet50 | ResNet-50 | 전체 미세조정 | 0.0001 | 적용 | 0.619 | 0.929 | 0.615 |
 | m_convnext | ConvNeXt-Tiny | 전체 미세조정 | 0.0001 | 적용 | **0.652** | **0.951** | **0.648** |
 
-모델을 뺀 나머지 조건(학습 방식, 학습률, 증강, 데이터)이 모두 같으므로 **공정한 비교**입니다.
+모델을 뺀 나머지 조건(학습 방식, 학습률, 증강, 데이터)이 모두 같으므로 **공정한 비교**입니다. 다만 사전학습 가중치가 달랐던 점은 2-5에서 바로잡았습니다.
+
+### 2-5. ImageNet-1k 가중치로 다시 학습: 사전학습 조건 맞추기 (2026-11-16)
+
+결과를 해석하다가, 두 모델이 내려받은 사전학습 가중치가 서로 다르다는 것을 발견했습니다(3-4). timm에서 `convnext_tiny`라고만 쓰면 기본값인 `convnext_tiny.in12k_ft_in1k`(ImageNet-12k로 먼저 학습한 뒤 1k로 다듬은 가중치)를 받아 오기 때문입니다. ResNet-50(`resnet50.a1_in1k`)과 조건을 맞추려고 **ImageNet-1k로만 사전학습된 공식 가중치 `convnext_tiny.fb_in1k`**로 다시 학습했습니다. 코드는 고치지 않고 `--model` 값만 바꿨습니다.
+
+```
+python step4_train.py --name m_convnext_in1k --model convnext_tiny.fb_in1k --train-csv splits_csv/train.csv --val-csv splits_csv/val.csv --image-root split_result_224 --epochs 20
+python step5_evaluate.py --exp-dir results/m_convnext_in1k --split-csv splits_csv/val.csv --image-root split_result_224 --tag val
+```
+
+![ImageNet-1k 가중치로 학습](images/14_convnext_in1k_training.png)
+
+- 처음 실행 때 새 가중치(약 114MB)를 내려받았습니다. 화면의 `symlinks` 경고는 Windows에서 내려받은 파일을 저장하는 방식에 대한 안내라 학습에는 영향이 없습니다.
+- **3에폭에서 최고 성능**(검증 macro-F1 0.642)이 나왔고, 4~7에폭은 이 기록을 넘지 못해 **7에폭에서 조기 종료**되었습니다. 12k→1k 가중치(7에폭이 최고)보다 더 빨리 최고점에 도달했습니다.
+
+![ImageNet-1k 가중치 평가](images/15_convnext_in1k_eval.png)
+
+| 사전학습 가중치 | 1에폭 검증 정확도 (출력층만 학습) | 정확도 | 한 칸 차이 정확도 | macro-F1 | 가장 좋았던 에폭 |
+|---|---:|---:|---:|---:|---:|
+| ResNet-50 (`a1_in1k`) | 35.5% | 61.9% | 92.9% | 0.615 | 8 |
+| ConvNeXt-Tiny (`fb_in1k`) | 44.3% | **64.5%** | **94.6%** | **0.642** | 3 |
+| ConvNeXt-Tiny (`in12k_ft_in1k`, 참고) | 54.6% | 65.2% | 95.1% | 0.648 | 7 |
+
+해석은 3-4에 있습니다.
+
+### 2-6. 증강 없이 학습: 증강 유무 비교 (2026-11-22)
+
+증강이 실제로 도움이 됐는지 확인하려고, ImageNet-1k 가중치 ConvNeXt를 **증강만 끄고 나머지 조건은 모두 그대로** 둔 채 다시 학습했습니다. 뒤쪽 에폭의 흐름까지 보려고 조기 종료 없이(`--patience 100`) **20에폭까지** 학습했습니다.
+
+```
+python step4_train.py --name noaug_convnext --model convnext_tiny.fb_in1k --no-augment --patience 100 --train-csv splits_csv/train.csv --val-csv splits_csv/val.csv --image-root split_result_224 --epochs 20
+python step5_evaluate.py --exp-dir results/noaug_convnext --split-csv splits_csv/val.csv --image-root split_result_224 --tag val
+```
+
+학습, 평가, 비교 그래프를 한 번에 실행하는 파일은 [`code/run_augment_compare.bat`](code/run_augment_compare.bat)입니다.
+
+![증강 없이 20에폭 학습](images/16_noaug_convnext_training.png)
+
+![증강 없음 평가 결과](images/17_noaug_convnext_eval.png)
+
+| 에폭 | 학습 정확도 (있음 → **없음**) | 검증 정확도 (있음 → **없음**) | 검증 손실 (있음 → **없음**) | macro-F1 (있음 → **없음**) |
+|---:|---|---|---|---|
+| 1 | 0.382 → **0.394** | 0.443 → **0.452** | 1.380 → **1.359** | 0.427 → **0.444** |
+| 2 | 0.576 → **0.586** | 0.619 → **0.626** | 0.879 → **0.866** | 0.614 → **0.620** |
+| 3 | 0.646 → **0.680** | 0.645 → **0.640** | 0.830 → **0.843** | **0.642 (최고)** → **0.640 (최고)** |
+| 4 | 0.686 → **0.775** | 0.640 → **0.630** | 0.841 → **0.949** | 0.632 → **0.631** |
+| 5 | 0.740 → **0.898** | 0.640 → **0.628** | 0.864 → **1.215** | 0.637 → **0.626** |
+| 6 | 0.798 → **0.974** | 0.626 → **0.614** | 1.006 → **1.547** | 0.625 → **0.617** |
+| 7 | 0.859 → **0.991** | 0.628 → **0.616** | 1.128 → **1.740** | 0.622 → **0.611** |
+| 20 | — → **0.999** | — → **0.630** | — → **2.480** | — → **0.627** |
+
+증강 있는 쪽은 7에폭에서 조기 종료되어 8에폭 이후 기록이 없습니다.
+
+| | 정확도 | 한 칸 차이 정확도 | macro-F1 | 가장 좋았던 에폭 |
+|---|---:|---:|---:|---:|
+| 증강 있음 (`m_convnext_in1k`) | **64.5%** | 94.6% | **0.642** | 3 |
+| 증강 없음 (`noaug_convnext`) | 64.0% | **94.8%** | 0.640 | 3 |
+| 차이 | −0.5%p | +0.2%p | −0.002 | 같음 |
+
+해석은 3-6에 있습니다.
 
 ---
 
 ## 3. 결과 해석
+
+> 3-1 ~ 3-3, 3-5는 처음 실험(`m_convnext`, ImageNet-12k → 1k 가중치) 기준입니다. ImageNet-1k 가중치로 맞춘 결과는 3-4와 3-6에 있습니다.
 
 ### 3-1. 혼동 행렬: 나이대별로 얼마나 맞혔나
 
@@ -243,9 +316,37 @@ python step4_train.py --name full20_convnext --model convnext_tiny --train-csv s
 
 두 가중치 모두 우리가 직접 고른 것이 아니라, timm 라이브러리가 기본으로 내려받는 버전입니다. 출력층만 학습하는 1에폭부터 ConvNeXt가 크게 앞선 것도 이 영향이 커 보입니다. 따라서 **두 모델의 성능 차이에는 구조의 차이와 사전학습 데이터의 차이가 함께 섞여 있습니다.**
 
+**→ 2-5에서 직접 확인했습니다.** ConvNeXt를 ResNet-50과 같은 ImageNet-1k 가중치로 다시 학습해, 두 효과를 나눠 봤습니다.
+
+| 비교 | 바뀐 것 | macro-F1 변화 | 의미 |
+|---|---|---:|---|
+| ResNet-50 (1k) → ConvNeXt (1k) | 구조만 | 0.615 → 0.642 (**+0.027**) | 구조 효과 |
+| ConvNeXt (1k) → ConvNeXt (12k→1k) | 사전학습 데이터만 | 0.642 → 0.648 (+0.006) | 사전학습 데이터 효과 |
+
+- 전체 차이(0.033) 중 **약 80%가 구조 차이**에서 왔습니다. 사전학습 조건을 맞춰도 ConvNeXt가 더 좋다는 결론은 그대로입니다.
+- 더 큰 사전학습 데이터는 출발점(1에폭 검증 정확도 44.3% → 54.6%)을 크게 높였지만, 우리 데이터(약 7만 장)로 학습하면서 그 차이가 대부분 메워졌습니다.
+- 각 실험을 한 번씩만 학습했으므로, 0.006처럼 작은 차이는 우연일 수 있습니다.
+
 ### 3-5. 정리
 
 > ConvNeXt-Tiny는 정확도 65.2%, 한 칸 차이 정확도 95.1%, macro-F1 0.648로 ResNet-50(61.9%, 92.9%, 0.615)보다 모든 지표에서 높았고, 7개 나이대 모두에서 더 잘 맞혔습니다. 두 모델 모두 0~9세와 60세 이상은 잘 맞혔지만 30~50대는 50% 안팎으로 가장 어려워했고, 틀린 경우는 대부분 바로 옆 나이대였습니다. ConvNeXt는 과적합이 빠르고 크게 나타났으며, macro-F1 기준 조기 종료로 11에폭에서 멈추고 7에폭의 모델을 최종 모델로 사용했습니다. 20에폭까지 추가로 학습해도 두 모델의 최고 성능은 바뀌지 않아, 조기 종료가 성능 손해 없이 학습 시간을 줄였음을 확인했습니다. 다만 ConvNeXt는 더 많은 데이터로 사전학습된 가중치를 사용했기 때문에, 성능 차이에는 사전학습 데이터의 영향도 섞여 있습니다.
+
+### 3-6. 증강 유무 비교: ConvNeXt에서는 왜 차이가 없었나
+
+![ConvNeXt-Tiny 증강 있음 vs 없음](images/18_augment_compare_convnext.png)
+
+그래프는 2-5, 2-6의 학습 기록 값으로 그렸습니다. 증강 있음은 7에폭에서 조기 종료되어 7에폭까지만 표시했습니다.
+
+- **최고 성능은 거의 같습니다.** 증강 있음 0.642, 없음 0.640으로 차이가 0.002이고, 둘 다 3에폭에서 최고점이 나왔습니다. 한 번씩만 학습한 실험이라 이 정도는 차이가 없다고 보는 것이 맞습니다.
+- **과적합 속도는 확실히 다릅니다.** 증강이 없으면 학습 정확도가 5에폭 89.8%, 7에폭 99.1%로 학습 사진을 거의 다 외웠습니다. 같은 7에폭에 증강이 있을 때는 85.9%였습니다. 검증 손실도 7에폭 기준 1.128(있음)과 1.740(없음)으로 차이가 컸고, 증강이 없으면 20에폭에 2.480까지 올라갔습니다.
+- **왜 최고 성능은 같았을까**: ConvNeXt는 증강과 상관없이 **3에폭 만에 최고점**에 도달했습니다. 증강은 학습 사진을 외우는 것을 늦추는 역할인데, ConvNeXt는 본격적으로 외우기 전에 이미 최고점을 찍었기 때문에 증강이 최고 성능을 끌어올릴 여지가 거의 없었던 것으로 보입니다.
+- **ResNet-50과의 차이**: 천천히 학습하는 ResNet-50(최고 8에폭)은 증강이 없으면 4에폭부터 외우기 시작해 macro-F1이 0.038 떨어졌습니다([ResNet50 폴더](../ResNet50) 3-3). 즉 **증강은 두 모델 모두에서 과적합을 늦췄고, 그 효과가 최종 성능 차이로 이어지는지는 모델이 최고점에 얼마나 빨리 도달하느냐에 따라 달랐습니다.**
+- 증강 없는 ConvNeXt(0.640)도 증강 있는 ResNet-50(0.615)보다 높아, 이번 실험에서는 **구조 차이의 효과가 증강 효과보다 컸습니다.**
+
+| 모델 | 증강 있음 | 증강 없음 | 증강 효과 (macro-F1) | 최고 에폭 (있음 → 없음) |
+|---|---:|---:|---:|---|
+| ResNet-50 | 0.615 | 0.577 | **+0.038** | 8 → 4 |
+| ConvNeXt-Tiny (1k) | 0.642 | 0.640 | +0.002 | 3 → 3 |
 
 ---
 
@@ -253,14 +354,16 @@ python step4_train.py --name full20_convnext --model convnext_tiny --train-csv s
 
 - [x] 20에폭까지 추가 학습으로 조기 종료 효과 확인 (3-3)
 - [x] 이어하기 때 조기 종료 조건을 다시 확인하도록 학습 코드 수정 (2-3)
+- [x] 공정한 구조 비교: ImageNet-1k 가중치(`convnext_tiny.fb_in1k`)로 다시 학습 (2-5, 3-4)
+- [x] 증강 유무 비교 (2-6, 3-6)
 
-- [ ] 최종 모델 정하기(현재 검증 결과로는 ConvNeXt-Tiny). 그 뒤 시험 데이터로 **한 번만** 평가합니다.
+- [ ] 최종 모델 정하기(현재 검증 결과로는 ImageNet-1k 가중치 ConvNeXt-Tiny, `m_convnext_in1k`의 3에폭 모델). 그 뒤 시험 데이터로 **한 번만** 평가합니다.
   ```
-  python step5_evaluate.py --exp-dir results/m_convnext --split-csv splits_csv/test.csv --image-root split_result_224 --tag test
+  python step5_evaluate.py --exp-dir results/m_convnext_in1k --split-csv splits_csv/test.csv --image-root split_result_224 --tag test
   ```
 - [ ] Grad-CAM으로 30대·40대를 틀린 사진에서 모델이 얼굴의 어디를 보고 판단했는지 확인합니다.
   ```
-  python step6_gradcam.py --exp-dir results/m_convnext --split-csv splits_csv/val.csv --image-root split_result_224 --per-band 4
+  python step6_gradcam.py --exp-dir results/m_convnext_in1k --split-csv splits_csv/val.csv --image-root split_result_224 --per-band 4
   ```
 - [ ] (선택) ConvNeXt의 과적합 줄이기: 학습률을 0.00005로 낮추거나 증강을 더 강하게 해서 다시 학습합니다.
-- [ ] (선택) 공정한 구조 비교: ConvNeXt도 ImageNet-1k로만 사전학습된 가중치(`convnext_tiny.fb_in1k`)로 학습해, 구조 차이만 비교합니다.
+- [ ] (선택) 증강 있는 ConvNeXt(1k)도 20에폭까지 학습(`full20_convnext_in1k`)해, 증강 없음과 20에폭 전체 곡선을 나란히 비교합니다.
