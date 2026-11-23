@@ -1,0 +1,32 @@
+{
+  "epochs": 20,
+  "lr": 0.001,
+  "workers": 4,
+  "out_dir": "results/small_cnn_unified_lr1e-3",
+  "subset": 0,
+  "stop_after": 0,
+  "batch_size": 64,
+  "seed": 42,
+  "img_size": 224,
+  "optimizer": "AdamW",
+  "weight_decay": 0.05,
+  "schedule": "linear warmup 1 epoch + cosine, per batch",
+  "amp": true,
+  "drop_last": true,
+  "class_weights": [
+    0.8864,
+    0.854,
+    0.854,
+    0.854,
+    0.8467,
+    1.5068,
+    1.9449
+  ],
+  "steps_per_epoch": 1120,
+  "total_steps": 22400,
+  "warm_steps": 1120,
+  "n_train": 71735,
+  "n_val": 15288,
+  "best_epoch": 17,
+  "best_val_macro_f1": 0.5052275913917267
+}
