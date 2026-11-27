@@ -42,7 +42,8 @@ from gradcam import GradCAM, overlay, target_layer     # 같은 폴더의 Grad-C
 
 BAND_NAMES = ["0-9세", "10대", "20대", "30대", "40대", "50대", "60세 이상"]   # 나이대 이름 (eval_small_cnn.py와 같은 순서, 번호 0~6)
 DEFAULT_WEIGHTS = {                                     # 모델별 기본 가중치 경로 — 재학습 후에는 이 파일만 바꿔 끼우면 됨
-    "small_cnn": os.path.join(HERE, "weights", "small_cnn_best.pth"),        # 작은CNN 학습 코드의 small_cnn_best.pth
+    # 작은CNN v2 가중치 (splits_csv_v2 학습, 17 에폭, 검증 macro-F1 0.461, 개발일지 14). 다른 가중치는 --weights 로
+    "small_cnn": os.path.join(ROOT, "작은CNN", "results", "small_cnn_v2_lr1e-3", "small_cnn_best.pth"),
     "resnet50": os.path.join(HERE, "weights", "resnet50_best.pt"),           # ResNet50 step4_train.py의 best.pt 이름만 바꿔 복사
     "convnext_tiny": os.path.join(HERE, "weights", "convnext_tiny_best.pt"), # ConvNeXt step4_train.py의 best.pt 이름만 바꿔 복사
 }
@@ -55,7 +56,8 @@ def parse_args():                                       # 명령줄 옵션을 �
     p.add_argument("--weights", default=None)           # --model의 가중치 파일 경로. 안 주면 DEFAULT_WEIGHTS[모델]
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")   # GPU가 없으면 CPU
     p.add_argument("--port", type=int, default=7860)    # 브라우저 주소의 포트 번호
-    p.add_argument("--margin", type=float, default=0.15)   # 얼굴 상자 여백 (상자 크기 대비 비율, 위·아래·양옆 각각)
+    p.add_argument("--margin", type=float, nargs=4, default=MARGINS,   # (nargs=4: 숫자 4개) 얼굴 상자 여백 왼 위 오른 아래 (상자 크기 대비 비율)
+                   metavar=("LEFT", "TOP", "RIGHT", "BOTTOM"))
     p.add_argument("--image", default=None)             # 사진 경로를 주면 화면 없이 상위 3개만 출력하고 끝 (점검용)
     return p.parse_args()                               # args.model, args.weights ... 로 사용
 
@@ -90,13 +92,17 @@ def load_model(name, weights, device):                  # (name=모델 이름, w
 #   ▶ [모듈 G-3 시작] 얼굴 검출·자르기
 #   입력: PIL 이미지 (RGB)
 #   출력: 잘라낸 얼굴 PIL 이미지, 못 찾으면 None
-#   여백 기본값 0.15: 학습 사진(224×224)에서 Haar 상자 너비가 사진의 약 79%(중앙값)
-#                    → 상자 + 양쪽 15% = 1.3배로 자르면 상자 비율 약 77%로 비슷해짐
+#   여백 MARGINS: v2 학습 사진(division_224AFAD-X/training) 나이대별 300장 = 2,100장에 아래 detect_face를 돌려 잰 값
+#                 (검출 1,795장, 중앙값): 상자 폭 = 사진 폭의 0.96배, 상자 중심 (x 0.49, y 0.42)
+#                 상자 밖 여백 (상자 크기 대비) 왼 0.014, 위 −0.065, 오른 0.028, 아래 0.105 — 나이대별 차이 ±0.01
+#                 → 왼·오른은 평균 0.02로 같게, 위는 상자 안쪽에서 자름(음수), 아래는 상자보다 더 내려감
+#                 (예전 값: 사방 0.15 — 예전 데이터에서 상자 폭이 사진의 79%였을 때 기준)
 #   얼굴로 꽉 찬 사진 대책 (테스트 사진 500장 기준 검출률 58% → 90%):
 #     ① 검출 전에 사진 둘레에 검은 테두리를 붙임 — Haar는 얼굴 주변 여유 공간이 있어야 잘 찾음 (58% → 83%)
 #     ② 기본 cascade가 못 찾으면 alt2 → 옆얼굴 → 옆얼굴(좌우 반전) 순서로 다시 시도 (83% → 90%)
 # =============================================================================
 
+MARGINS = (0.02, -0.065, 0.02, 0.105)                   # 상자 크기 대비 여백 (왼, 위, 오른, 아래). 음수 = 상자 안쪽으로 자름
 PAD_RATIO = 0.25                                        # 테두리 두께 (사진 긴 변 대비 비율)
 _H = cv2.data.haarcascades                              # OpenCV에 같이 들어 있는 cascade 파일 폴더 (추가 다운로드 없음)
 CASCADES = [                                            # (검출기, 좌우 반전 여부) — 위에서부터 차례로 시도
@@ -108,7 +114,7 @@ CASCADES = [                                            # (검출기, 좌우 반
 
 
 # TODO: 팀 전처리와 같은 검출·정렬 방법으로 교체
-def detect_and_crop(image, margin=0.15):                # (image=PIL 이미지, margin=상자 크기 대비 여백 비율)
+def detect_face(image):                                 # (image=PIL 이미지) → 가장 큰 얼굴 상자 (x, y, w, h) 원본 좌표, 못 찾으면 None
     rgb = np.array(image.convert("RGB"))                # PIL → (H, W, 3) 배열, RGB 순서
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)        # Haar는 흑백으로 검출 (H, W)
     H, W = gray.shape                                   # 원본 사진 높이, 너비
@@ -126,10 +132,18 @@ def detect_and_crop(image, margin=0.15):                # (image=PIL 이미지, 
     if len(boxes) == 0:                                 # 모든 검출기가 못 찾음
         return None
     x, y, w, h = max(boxes, key=lambda b: b[2] * b[3])  # 여러 얼굴이면 넓이(w×h)가 가장 큰 얼굴
-    x, y = x - p, y - p                                 # 테두리 붙인 좌표 → 원본 사진 좌표
-    dx, dy = int(w * margin), int(h * margin)           # 여백 픽셀 수 (가로, 세로)
-    left, top = max(x - dx, 0), max(y - dy, 0)          # 여백만큼 넓히되 사진 밖으로 나가지 않게
-    right, bottom = min(x + w + dx, W), min(y + h + dy, H)
+    return int(x - p), int(y - p), int(w), int(h)       # 테두리 붙인 좌표 → 원본 사진 좌표 (사진 밖으로 나갈 수 있음)
+
+
+def detect_and_crop(image, margin=MARGINS):             # (image=PIL 이미지, margin=(왼, 위, 오른, 아래) 상자 크기 대비 여백 비율)
+    box = detect_face(image)                            # 얼굴 상자 (x, y, w, h) 또는 None
+    if box is None:
+        return None
+    x, y, w, h = box
+    W, H = image.size                                   # 원본 사진 너비, 높이
+    ml, mt, mr, mb = margin                             # 여백 4개
+    left, top = max(x - int(w * ml), 0), max(y - int(h * mt), 0)   # 여백만큼 넓히되(음수면 좁히되) 사진 밖으로 나가지 않게
+    right, bottom = min(x + w + int(w * mr), W), min(y + h + int(h * mb), H)
     return image.convert("RGB").crop((left, top, right, bottom))   # (왼, 위, 오, 아래) 영역 잘라내기
 
 # -----------------------------------------------------------------------------
