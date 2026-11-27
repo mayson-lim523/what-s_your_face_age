@@ -5,13 +5,94 @@
 - **담당**: 모델 학습 (ResNet-50, ConvNeXt-Tiny)
 - **작성일**: 2026년 11월 9일
 - 환경 설치, 데이터 분리, 공통 학습 설정은 [ResNet50 폴더](../ResNet50)의 기록과 같습니다.
+- **새 데이터로 다시 학습 (2026-11-27)**: 팀 데이터가 `division_224AFAD-X`로 바뀌어 증강 있음/없음을 다시 학습했습니다. 결과는 바로 아래 **[새 데이터 결과](#새-데이터-결과-2026-11-27)**에 있습니다.
 
 > **용어 안내**
 > - **에폭**: 학습 데이터 전체를 한 번 다 보는 것을 1에폭이라고 합니다.
 > - **한 칸 차이 정확도**: 정답이거나 바로 옆 나이대를 맞힌 비율입니다.
 > - **macro-F1**: 나이대마다 점수를 따로 낸 뒤 평균한 값입니다. 사진이 적은 나이대의 성능도 똑같이 반영됩니다.
 
-## 결과 요약 (검증 데이터 15,288장)
+## 새 데이터 결과 (2026-11-27)
+
+> 이 장은 **새 데이터(`division_224AFAD-X`)** 기준입니다. 데이터가 바뀐 이유와 구성, 분리 결과는 [ResNet50 폴더의 새 데이터 결과](../ResNet50/README.md#새-데이터-결과-2026-11-27)에 있습니다. 그 아래 장들은 이전 데이터 기준이라 숫자를 직접 비교하면 안 됩니다. 전체 비교와 고찰은 [개발일지 05](../개발일지/KIMDONGHWI/2026-11-27_05_새_데이터_재학습과_증강_유무_비교.md)에 있습니다.
+
+### 1) 실행 명령
+
+사전학습 가중치는 ResNet-50과 같은 **ImageNet-1k(`convnext_tiny.fb_in1k`)**이고, 두 실험 모두 **조기 종료 없이 20에폭** 학습했습니다. 한 번에 실행하는 파일은 [`code/run_v2.bat`](code/run_v2.bat)입니다.
+
+```
+python step4_train.py --name v2_convnext --model convnext_tiny.fb_in1k --patience 100 --train-csv splits_csv_v2/train.csv --val-csv splits_csv_v2/val.csv --image-root data_v2 --epochs 20
+python step4_train.py --name v2_noaug_convnext --model convnext_tiny.fb_in1k --no-augment --patience 100 --train-csv splits_csv_v2/train.csv --val-csv splits_csv_v2/val.csv --image-root data_v2 --epochs 20
+python step5_evaluate.py --exp-dir results/v2_convnext --split-csv splits_csv_v2/val.csv --image-root data_v2 --tag val
+python step5_evaluate.py --exp-dir results/v2_noaug_convnext --split-csv splits_csv_v2/val.csv --image-root data_v2 --tag val
+python step5_evaluate.py --summary results --tag val
+```
+
+시작 화면의 `학습 64,353장 / 검증 13,790장`과 `나이대별 손실 가중치: [0.81 1.11 0.84 0.84 0.87 1.36 1.73]`로 새 데이터를 읽은 것을 확인했습니다.
+
+### 2) 증강 없음 학습 기록 (`v2_noaug_convnext`)
+
+![새 데이터 증강 없음 학습](images/19_v2_noaug_convnext_training.png)
+
+![새 데이터 ConvNeXt 증강 없음 곡선](images/22_v2_noaug_convnext_curve.png)
+
+| 에폭 | 학습 정확도 | 검증 정확도 | 검증 손실 | macro-F1 |
+|---:|---:|---:|---:|---:|
+| 1 | 0.354 | 0.401 | 1.424 | 0.389 |
+| 2 | 0.530 | 0.559 | 0.989 | 0.553 |
+| **3** | 0.630 | **0.581** | **0.960 (최저)** | **0.583 (최고)** |
+| 5 | 0.886 | 0.578 | 1.374 | 0.576 |
+| 7 | **0.991** | 0.575 | 2.042 | 0.579 |
+| 14 | 0.998 | 0.581 | 2.607 | 0.581 |
+| 20 | 0.999 | 0.581 | **2.800** | 0.582 |
+
+- 3에폭에 바로 최고점이 나왔고, 7에폭에 이미 학습 사진을 99% 외웠습니다. 검증 손실은 3에폭 이후 계속 올라 2.80이 되었습니다.
+- 14에폭 이후 macro-F1이 0.58대로 다시 올라오지만 3에폭 기록(0.583)은 넘지 못했습니다. 학습률이 0에 가까워지며 결과가 안정된 영향으로 보이고, 이전 데이터에서도 같은 현상이 있었습니다.
+- 증강 있음(`v2_convnext`)의 에폭별 기록은 캡처가 없어 평가 결과만 정리했습니다. 최고 에폭은 4입니다.
+
+### 3) 검증 데이터 평가
+
+![증강 있음 평가](images/20_v2_convnext_eval.png)
+
+![증강 없음 평가와 전체 비교표](images/21_v2_noaug_convnext_eval_summary.png)
+
+비교표에서 `v2_`로 시작하는 네 줄이 새 데이터 결과입니다.
+
+| 새 데이터 (검증 13,790장) | 정확도 | 한 칸 차이 정확도 | macro-F1 | 가장 좋았던 에폭 |
+|---|---:|---:|---:|---:|
+| **ConvNeXt-Tiny, 증강 있음** | **58.6%** | **94.2%** | **0.592** | 4 |
+| ConvNeXt-Tiny, 증강 없음 | 58.1% | 93.8% | 0.583 | 3 |
+| 증강 효과 | +0.5%p | +0.4%p | +0.009 | |
+
+### 4) ResNet-50과 비교 (새 데이터, 네 실험)
+
+![새 데이터 네 실험 비교](images/23_v2_four_runs_compare.png)
+
+| 모델 | 증강 | 정확도 | 한 칸 차이 정확도 | macro-F1 | 가장 좋았던 에폭 |
+|---|---|---:|---:|---:|---:|
+| ResNet-50 | 있음 | 56.6% | 92.1% | 0.565 | 11 |
+| ResNet-50 | 없음 | 52.5% | 89.3% | 0.525 | 5 |
+| **ConvNeXt-Tiny** | **있음** | **58.6%** | **94.2%** | **0.592** | 4 |
+| ConvNeXt-Tiny | 없음 | 58.1% | 93.8% | 0.583 | 3 |
+
+| 비교 | 이전 데이터 | 새 데이터 |
+|---|---:|---:|
+| 모델 차이 (ConvNeXt − ResNet, 둘 다 증강 있음) | +0.027 | **+0.027** |
+| ResNet-50 증강 효과 | +0.038 | **+0.040** |
+| ConvNeXt-Tiny 증강 효과 | +0.002 | **+0.009** |
+
+### 5) 해석
+
+- **ConvNeXt-Tiny가 다시 가장 좋았습니다.** 사전학습(ImageNet-1k)과 학습 조건이 같은 상태에서 macro-F1이 ResNet-50보다 0.027 높아, 차이는 **구조 효과**로 볼 수 있습니다. 한 칸 차이 정확도도 94.2%로 가장 높아, 크게 틀리는 경우가 가장 적었습니다.
+- **ConvNeXt는 증강 효과가 작았습니다 (+0.009).** 증강과 상관없이 3~4에폭에 바로 최고점에 도달해, 증강이 끌어올릴 여지가 적었습니다. 다만 과적합 속도는 확실히 달라, 증강이 없으면 7에폭에 학습 정확도 99%가 되었습니다.
+- **증강 효과는 천천히 학습하는 ResNet-50에서 4배 이상 컸습니다 (+0.040).** 증강은 두 모델 모두 과적합을 늦췄지만, 그 효과가 최고 성능으로 이어지는 정도는 모델이 최고점에 얼마나 빨리 도달하느냐에 따라 달랐습니다.
+- **증강 없는 ConvNeXt(0.583)도 증강 있는 ResNet-50(0.565)보다 높았습니다.** 이번 실험에서는 구조 차이의 효과가 증강 효과보다 컸습니다.
+- **이전 데이터와 같은 결론이 재현되었습니다.** 모델 차이 +0.027은 두 데이터에서 똑같았고, 증강 효과의 크기와 방향도 같았습니다. 각 실험을 한 번씩만 학습했지만 다른 데이터에서 같은 결과가 나와, 결론을 더 믿을 수 있게 되었습니다.
+- **최종 모델 후보**: ConvNeXt-Tiny, 증강 있음 (`results/v2_convnext`, 4에폭).
+
+---
+
+## 결과 요약 — 이전 데이터 (검증 데이터 15,288장)
 
 | 모델 | 사전학습 가중치 | 증강 | 정확도 | 한 칸 차이 정확도 | macro-F1 | 가장 좋았던 에폭 | 조기 종료 |
 |---|---|---|---:|---:|---:|---:|---:|
@@ -45,6 +126,7 @@ ResNet-50과 **같은 학습 코드**(`step4_train.py`)를 쓰고, 모델 이름
 | `step6_gradcam.py` | Grad-CAM 열지도 만들기 |
 | `run_convnext.bat` | ConvNeXt-Tiny 학습과 검증 평가를 한 번에 실행 |
 | `run_augment_compare.bat` | ImageNet-1k 가중치로 학습(증강 있음/없음) → 평가 → 비교 그래프까지 한 번에 실행 |
+| `run_v2.bat` | **새 데이터**로 증강 있음/없음 학습 → 평가 → 비교표 |
 | `plot_history_compare.py` | 두 실험의 `history.csv`를 나란히 그려 비교 (정확도, 검증 손실, 검증 macro-F1) |
 | `train_convnext.py` | 위와 같은 학습 설정을 ConvNeXt 전용 파일 하나로 모은 버전 |
 | `requirements.txt` | 필요한 라이브러리 목록 |
@@ -357,13 +439,13 @@ python step4_train.py --name full20_convnext --model convnext_tiny --train-csv s
 - [x] 공정한 구조 비교: ImageNet-1k 가중치(`convnext_tiny.fb_in1k`)로 다시 학습 (2-5, 3-4)
 - [x] 증강 유무 비교 (2-6, 3-6)
 
-- [ ] 최종 모델 정하기(현재 검증 결과로는 ImageNet-1k 가중치 ConvNeXt-Tiny, `m_convnext_in1k`의 3에폭 모델). 그 뒤 시험 데이터로 **한 번만** 평가합니다.
+- [ ] 최종 모델 정하기(새 데이터 검증 결과로는 ImageNet-1k 가중치 ConvNeXt-Tiny, 증강 있음 `v2_convnext`의 4에폭 모델). 그 뒤 시험 데이터로 **한 번만** 평가합니다.
   ```
-  python step5_evaluate.py --exp-dir results/m_convnext_in1k --split-csv splits_csv/test.csv --image-root split_result_224 --tag test
+  python step5_evaluate.py --exp-dir results/v2_convnext --split-csv splits_csv_v2/test.csv --image-root data_v2 --tag test
   ```
 - [ ] Grad-CAM으로 30대·40대를 틀린 사진에서 모델이 얼굴의 어디를 보고 판단했는지 확인합니다.
   ```
-  python step6_gradcam.py --exp-dir results/m_convnext_in1k --split-csv splits_csv/val.csv --image-root split_result_224 --per-band 4
+  python step6_gradcam.py --exp-dir results/v2_convnext --split-csv splits_csv_v2/val.csv --image-root data_v2 --per-band 4
   ```
 - [ ] (선택) ConvNeXt의 과적합 줄이기: 학습률을 0.00005로 낮추거나 증강을 더 강하게 해서 다시 학습합니다.
 - [ ] (선택) 증강 있는 ConvNeXt(1k)도 20에폭까지 학습(`full20_convnext_in1k`)해, 증강 없음과 20에폭 전체 곡선을 나란히 비교합니다.
