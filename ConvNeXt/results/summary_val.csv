@@ -1,0 +1,12 @@
+﻿실험,모델,학습방식,학습률,증강,제외데이터,정확도,한칸차이정확도,macroF1
+base_resnet50,resnet50,full,0.0001,True,,0.619,0.929,0.615
+full20_convnext,convnext_tiny,full,0.0001,True,,0.652,0.951,0.648
+full20_resnet50,resnet50,full,0.0001,True,,0.619,0.929,0.615
+m_convnext,convnext_tiny,full,0.0001,True,,0.652,0.951,0.648
+m_convnext_in1k,convnext_tiny.fb_in1k,full,0.0001,True,,0.645,0.946,0.642
+noaug_convnext,convnext_tiny.fb_in1k,full,0.0001,False,,0.640,0.948,0.640
+noaug_resnet50,resnet50,full,0.0001,False,,0.582,0.899,0.577
+v2_convnext,convnext_tiny.fb_in1k,full,0.0001,True,,0.586,0.942,0.592
+v2_noaug_convnext,convnext_tiny.fb_in1k,full,0.0001,False,,0.581,0.938,0.583
+v2_noaug_resnet50,resnet50,full,0.0001,False,,0.525,0.893,0.525
+v2_resnet50,resnet50,full,0.0001,True,,0.566,0.921,0.565

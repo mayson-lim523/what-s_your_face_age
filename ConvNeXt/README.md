@@ -30,6 +30,8 @@ python step5_evaluate.py --summary results --tag val
 
 시작 화면의 `학습 64,353장 / 검증 13,790장`과 `나이대별 손실 가중치: [0.81 1.11 0.84 0.84 0.87 1.36 1.73]`로 새 데이터를 읽은 것을 확인했습니다.
 
+결과 CSV(전체 비교표 `summary_val.csv`, 에폭별 기록)는 [`results`](results) 폴더에 있습니다.
+
 ### 2) 증강 없음 학습 기록 (`v2_noaug_convnext`)
 
 ![새 데이터 증강 없음 학습](images/19_v2_noaug_convnext_training.png)
