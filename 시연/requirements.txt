@@ -1,0 +1,5 @@
+# 시연 화면에 추가로 필요한 패키지 (torch, torchvision, numpy, pillow, pandas, scikit-learn, matplotlib는 작은CNN/requirements.txt)
+gradio==6.32.0
+# OpenCV 5.x는 Haar cascade(CascadeClassifier)가 빠져 있어서 4.x를 써야 함
+opencv-python==4.14.0.94
+timm==1.0.31
