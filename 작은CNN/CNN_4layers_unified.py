@@ -5,7 +5,7 @@
 #
 #   [기존 CNN_4layers_latest.py와 다른 점] (팀원 ResNet-50·ConvNeXt와 같은 조건)
 #     데이터     : ImageFolder → splits_csv/*.csv 를 읽는 Dataset
-#     최적화     : Adam(lr 1e-3 고정) → AdamW(lr 1e-4, weight_decay 0.05)
+#     최적화     : Adam(lr 1e-3 고정) → AdamW(lr 1e-3 기본값, weight_decay 0.05) — 작은 CNN만 1e-3 (팀원 1e-4)
 #     학습률     : 고정 → 첫 1 에폭 선형 워밍업 + 코사인 감소 (배치마다 갱신)
 #     혼합 정밀도: 없음 → autocast + GradScaler
 #     DataLoader : 학습용 drop_last=True, num_workers·pin_memory 사용
@@ -22,6 +22,8 @@
 #     본학습       : python models\CNN_4layers_unified.py
 #     100장 점검   : python models\CNN_4layers_unified.py --subset 100 --epochs 100 --lr 1e-3 --out-dir results\check_subset100
 #     2 에폭 점검  : python models\CNN_4layers_unified.py --stop-after 2 --out-dir results\check_full2
+#     새 데이터(v2): python models\CNN_4layers_unified.py --csv-dir splits_csv_v2 --image-root division_224AFAD-X --out-dir results\small_cnn_v2_lr1e-3
+#                    (v2 CSV의 path는 image-root 기준: training/0_9/xxx.jpg → train/val 모두 image-root를 사진 폴더로 사용)
 #
 # #############################################################################
 
@@ -55,7 +57,10 @@ BATCH_SIZE = 64                                         # 배치 크기 (팀 조
 SEED = 42                                               # 난수 시드 (팀 조건 6)
 NUM_CLASSES = 7                                         # 나이대 7개
 WEIGHT_DECAY = 0.05                                     # AdamW 가중치 감쇠 (팀 조건 5)
-TEAM_WEIGHTS = [0.89, 0.85, 0.85, 0.85, 0.85, 1.51, 1.94]   # 팀이 정한 나이대별 손실 가중치 (계산값과 비교용, 팀 조건 4)
+TEAM_WEIGHTS = {                                        # 팀이 정한 나이대별 손실 가중치 — CSV 폴더 이름별 기준값 (계산값과 비교용, 팀 조건 4)
+    "splits_csv":    [0.89, 0.85, 0.85, 0.85, 0.85, 1.51, 1.94],   # 예전 데이터 (학습 71,735장)
+    "splits_csv_v2": [0.81, 1.11, 0.84, 0.84, 0.87, 1.36, 1.73],   # 새 데이터 v2 (학습 64,353장)
+}
 MEAN = (0.485, 0.456, 0.406)                            # ImageNet 채널별 평균 (R, G, B)
 STD = (0.229, 0.224, 0.225)                             # ImageNet 채널별 표준편차 (R, G, B)
 
@@ -63,7 +68,10 @@ STD = (0.229, 0.224, 0.225)                             # ImageNet 채널별 표
 def parse_args():                                       # 명령줄 옵션을 읽어서 돌려줌
     p = argparse.ArgumentParser(description="SmallCNN 팀 공통 조건 학습")   # (description=도움말 첫 줄)
     p.add_argument("--epochs", type=int, default=20)    # (type=정수, default=20) 전체 에폭 수. 학습률 스케줄 길이도 이 값 기준
-    p.add_argument("--lr", type=float, default=1e-4)    # 최대 학습률 (워밍업이 끝났을 때의 값)
+    p.add_argument("--lr", type=float, default=1e-3)    # 최대 학습률 (워밍업이 끝났을 때의 값). 작은 CNN만 1e-3 (팀원 모델은 1e-4)
+    p.add_argument("--csv-dir", default=CSV_DIR)        # train.csv / val.csv 폴더 (기본 splits_csv, 새 데이터는 splits_csv_v2)
+    p.add_argument("--image-root", default=None)        # 주면 train/val 모두 이 폴더 기준으로 path를 읽음 / 안 주면 DATA_DIR/training, DATA_DIR/validation
+    p.add_argument("--no-augment", action="store_true") # (action=있으면 True) 학습 transform을 검증 transform과 같게 (증강 끔)
     p.add_argument("--workers", type=int, default=4)    # DataLoader 병렬 프로세스 수 (사진 읽기·증강을 GPU 계산과 동시에)
     p.add_argument("--out-dir", default="results/small_cnn_unified")   # 결과 저장 폴더
     p.add_argument("--subset", type=int, default=0)     # 0 = 전체 데이터 / N = 학습·검증 각 N장만, 증강 끔 (과적합 점검용)
@@ -164,24 +172,27 @@ class SmallCNN(nn.Module):
 #   출력: class_weights(), make_lr_lambda()
 # =============================================================================
 
-def class_weights(train_csv):                           # (train_csv=학습 CSV 경로) → 나이대별 손실 가중치 텐서
-    labels = torch.tensor(pd.read_csv(train_csv)["band"].values)   # 학습 사진 71,735장의 라벨
+def class_weights(train_csv, team):                    # (train_csv=학습 CSV 경로, team=팀 기준값 리스트 또는 None) → (가중치 텐서, 장수 텐서)
+    labels = torch.tensor(pd.read_csv(train_csv)["band"].values)   # 학습 사진 전체의 라벨 (예전 71,735장 / v2 64,353장)
     counts = torch.bincount(labels, minlength=NUM_CLASSES).float()   # (라벨들, minlength=7) 나이대별 장수
     w = counts.sum() / (NUM_CLASSES * counts)           # 전체 / (7 × 나이대 장수) — 적은 나이대일수록 큰 가중치
     rounded = [round(v, 2) for v in w.tolist()]         # 소수 둘째 자리로 반올림
     print("나이대별 장수:", counts.int().tolist())
     print("계산한 가중치:", [round(v, 4) for v in w.tolist()])
-    print("팀 가중치 비교(둘째 자리):", "일치" if rounded == TEAM_WEIGHTS else f"불일치 {rounded} vs {TEAM_WEIGHTS}")
-    if rounded != TEAM_WEIGHTS:                         # 팀 조건과 다르면 학습하지 않고 멈춤
-        raise SystemExit("가중치가 팀 값과 다릅니다. 멈춥니다.")
-    return w                                            # 계산한 정확한 값 반환 (둘째 자리에서 자른 값이 아님)
+    if team is None:                                    # 기준값이 없는 CSV 폴더 (TEAM_WEIGHTS에 없음)
+        print("팀 가중치 비교: 기준값 없음 (계산값 그대로 사용)")
+    elif rounded != team:                               # 기준값과 다르면 데이터가 바뀐 것 → 학습하지 않고 멈춤
+        raise SystemExit(f"가중치가 팀 값과 다릅니다 {rounded} vs {team}. 멈춥니다.")
+    else:                                               # 기준값과 같음
+        print("팀 가중치 비교(둘째 자리): 일치")
+    return w, counts                                    # 계산한 정확한 값 반환 (둘째 자리에서 자른 값이 아님) + 장수
 
 
 def make_lr_lambda(total, warm):                        # (total=전체 배치 스텝 수, warm=워밍업 스텝 수) → 배율 함수
     # LambdaLR은 "실제 학습률 = 최대 학습률(--lr) × lr_lambda(step)" 으로 계산함. step은 0부터 1씩 증가 (배치마다)
     #
     # ① 워밍업 (step < warm, 첫 1 에폭):  배율 = (step + 1) / warm
-    #    step 0 → 1/1120 ≈ 0.0009 (거의 0), step 1119 → 1120/1120 = 1.0 (최대)
+    #    step 0 → 1/1005 ≈ 0.001 (거의 0), step 1004 → 1005/1005 = 1.0 (최대)  (v2 기준)
     #    → 처음부터 큰 학습률을 쓰면 무작위 가중치에서 크게 흔들리므로, 천천히 올려 안정적으로 출발
     # ② 코사인 감소 (step ≥ warm):  배율 = 0.5 × (1 + cos(π × 진행률)),  진행률 = (step − warm) / (total − warm)
     #    진행률 0 → cos 0 = 1 → 배율 1.0 / 진행률 0.5 → cos(π/2) = 0 → 0.5 / 진행률 1 → cos π = −1 → 0
@@ -303,9 +314,17 @@ if __name__ == "__main__":
     os.makedirs(args.out_dir, exist_ok=True)            # 결과 폴더 만들기
 
     # ---------- 데이터 ----------
-    train_csv = os.path.join(CSV_DIR, "train.csv")      # 학습 CSV 경로
-    train_ds = FaceCSVDataset(train_csv, os.path.join(DATA_DIR, "training"), train_transform)   # 학습 71,735장
-    val_ds = FaceCSVDataset(os.path.join(CSV_DIR, "val.csv"), os.path.join(DATA_DIR, "validation"), val_transform)   # 검증 15,288장
+    train_csv = os.path.join(args.csv_dir, "train.csv") # 학습 CSV 경로
+    val_csv = os.path.join(args.csv_dir, "val.csv")     # 검증 CSV 경로
+    if args.image_root:                                 # v2 방식: CSV path가 image-root 기준 (training/0_9/xxx.jpg)
+        train_dir = val_dir = args.image_root           # train/val 모두 같은 최상위 폴더
+    else:                                               # 예전 방식: CSV path가 분할 폴더 기준 (0 9/xxx.jpg)
+        train_dir, val_dir = os.path.join(DATA_DIR, "training"), os.path.join(DATA_DIR, "validation")
+    tr_tf = val_transform if args.no_augment else train_transform   # --no-augment면 학습도 증강 없이
+    train_ds = FaceCSVDataset(train_csv, train_dir, tr_tf)          # 학습 (예전 71,735장 / v2 64,353장)
+    val_ds = FaceCSVDataset(val_csv, val_dir, val_transform)        # 검증 (예전 15,288장 / v2 13,790장)
+    print("CSV:", train_csv, "/", val_csv, "| image-root:", args.image_root or f"{DATA_DIR}/training, {DATA_DIR}/validation")
+    print("증강:", "끔" if args.no_augment or args.subset else "켬")   # subset 모드는 아래에서 증강을 끔
     if args.subset:                                     # 과적합 점검 모드
         g = torch.Generator().manual_seed(SEED)         # 부분집합 뽑기 전용 난수 (매번 같은 N장)
         train_idx = torch.randperm(len(train_ds), generator=g)[:args.subset].tolist()   # 학습에서 무작위 N개 번호
@@ -316,8 +335,8 @@ if __name__ == "__main__":
     print("학습", len(train_ds), "장 / 검증", len(val_ds), "장")
 
     # drop_last=True: 마지막에 64장이 안 되는 자투리 배치를 버림
-    #   71,735 = 64 × 1,120 + 55 → 매 에폭 55장을 버리고 1,120배치만 학습
-    #   (shuffle=True라 버려지는 55장은 에폭마다 다름 → 모든 사진이 골고루 쓰임)
+    #   v2: 64,353 = 64 × 1,005 + 33 → 매 에폭 33장을 버리고 1,005배치만 학습 (예전 71,735 = 64 × 1,120 + 55)
+    #   (shuffle=True라 버려지는 33장은 에폭마다 다름 → 모든 사진이 골고루 쓰임)
     #   이유: 너무 작은 배치는 BatchNorm 통계가 불안정해짐 + 에폭당 스텝 수가 딱 맞아 스케줄 계산이 단순해짐 (팀원과 동일)
     #   subset 모드(100장)에서는 끔: 켜면 64장 한 배치만 학습하고 36장은 매번 버려짐
     loader_kw = dict(batch_size=BATCH_SIZE, num_workers=args.workers,   # 공통 옵션 (배치 크기, 병렬 프로세스 수)
@@ -329,11 +348,12 @@ if __name__ == "__main__":
     # ---------- 모델·손실·최적화·스케줄 ----------
     model = SmallCNN().to(device)                       # 모델 생성 → 장치로
     print("파라미터 수:", sum(p.numel() for p in model.parameters()))   # 390695 이어야 함
-    weights = class_weights(train_csv)                  # 나이대별 가중치 (전체 학습 데이터 기준, 팀 값과 확인)
+    team_w = TEAM_WEIGHTS.get(os.path.basename(os.path.normpath(args.csv_dir)))   # CSV 폴더 이름으로 팀 기준값 찾기 (없으면 None)
+    weights, band_counts = class_weights(train_csv, team_w)   # 나이대별 가중치 (전체 학습 CSV 기준, 팀 기준값과 확인)
     criterion = nn.CrossEntropyLoss(weight=weights.to(device))   # (weight=나이대별 가중치) 가중 교차 엔트로피
     # AdamW: Adam과 같지만 weight_decay를 기울기와 섞지 않고 가중치에 직접 적용 (가중치를 매 스텝 조금씩 0쪽으로 당김 → 과적합 방지)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=WEIGHT_DECAY)   # (가중치들, lr=최대 학습률, weight_decay=감쇠)
-    steps_per_epoch = len(train_loader)                 # 에폭당 배치 수 (전체: 1,120)
+    steps_per_epoch = len(train_loader)                 # 에폭당 배치 수 (v2 전체: 1,005 / 예전 1,120)
     total_steps = args.epochs * steps_per_epoch         # 전체 스텝 = 에폭 수 × 에폭당 배치 수 (--stop-after와 무관하게 --epochs 기준)
     warm_steps = steps_per_epoch                        # 워밍업 = 첫 1 에폭
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, make_lr_lambda(total_steps, warm_steps))   # (optimizer, 배율 함수)
@@ -349,6 +369,10 @@ if __name__ == "__main__":
               "class_weights": [round(v, 4) for v in weights.tolist()],
               "steps_per_epoch": steps_per_epoch, "total_steps": total_steps, "warm_steps": warm_steps,
               "n_train": len(train_ds), "n_val": len(val_ds),
+              "train_csv": train_csv, "val_csv": val_csv,  # 사용한 CSV 경로
+              "train_dir": train_dir, "val_dir": val_dir,  # 실제 사진 폴더 (image-root 또는 DATA_DIR/...)
+              "band_counts": band_counts.int().tolist(),  # 학습 CSV 나이대별 장수 (가중치 계산 근거)
+              "augment": not (args.no_augment or args.subset),   # 학습 증강 사용 여부
               "best_epoch": None, "best_val_macro_f1": None}   # 학습 중 갱신
     config_path = os.path.join(args.out_dir, "config.json")    # 저장 경로
 

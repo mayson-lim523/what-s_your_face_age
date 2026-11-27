@@ -6,6 +6,9 @@
 #       (CNN_4layers.py를 import하면 학습이 다시 시작되므로 필요한 부분만 옮겨 옴)
 # 실행: 프로젝트 폴더에서  python eval_small_cnn.py
 #       (옵션 예: python eval_small_cnn.py --workers 4)
+#       새 데이터(v2): python eval_small_cnn.py --csv-dir splits_csv_v2 --image-root division_224AFAD-X
+#                      --weights results/small_cnn_v2_lr1e-3/small_cnn_best.pth --out-dir results/small_cnn_v2_lr1e-3/eval_val
+#       (--csv-dir를 주면 그 폴더의 val.csv를, 안 주면 기존처럼 --data-dir 폴더(ImageFolder)를 평가)
 # 출력: results/small_cnn_main/eval_val/
 #       metrics.json, per_band.csv, confusion_matrix.png, predictions.csv
 # =============================================================================
@@ -16,7 +19,8 @@ import os                                               # 폴더 만들기, 경�
 
 import torch                                            # PyTorch 본체 (텐서, GPU 연산, 가중치 불러오기)
 import torch.nn as nn                                   # nn: 신경망 층(Conv2d, BatchNorm2d, Linear 등)
-from torch.utils.data import DataLoader                 # 데이터셋을 배치로 묶어 꺼내주는 도구
+from torch.utils.data import DataLoader, Dataset        # DataLoader: 배치로 묶기 / Dataset: CSV 모드용 사진 꺼내는 규칙
+from PIL import Image                                   # CSV 모드에서 사진 파일 열기
 from torchvision import datasets, transforms            # ImageFolder 데이터셋 / 이미지 전처리 도구
 
 import pandas as pd                                     # 표(DataFrame) 만들기 → CSV 저장
@@ -53,6 +57,22 @@ val_transform = transforms.Compose([
     transforms.ToTensor(),                              # PIL 이미지(H, W, 3, 0~255) → 텐서(3, H, W, 0.0~1.0)
     transforms.Normalize(MEAN, STD),                    # (평균, 표준편차) 채널마다 (값 − 평균) / 표준편차
 ])
+
+
+# ---------- CSV 데이터셋 (--csv-dir 모드) ----------
+# CNN_4layers_unified.py의 FaceCSVDataset과 같은 방식 + samples 속성 (ImageFolder처럼 predictions.csv 경로용)
+class CSVImageDataset(Dataset):
+    def __init__(self, csv_path, image_root, transform):   # (csv_path=val.csv, image_root=path 기준 폴더, transform=전처리)
+        df = pd.read_csv(csv_path)                      # CSV 읽기 (열: path, band, ...)
+        self.samples = [(os.path.join(image_root, p), int(b)) for p, b in zip(df["path"], df["band"])]   # [(전체 경로, 나이대 번호), ...]
+        self.transform = transform                      # 전처리 저장
+
+    def __len__(self):                                  # 사진 수
+        return len(self.samples)
+
+    def __getitem__(self, i):                           # i번째 (이미지 텐서, 라벨)
+        path, label = self.samples[i]                   # 경로, 정답
+        return self.transform(Image.open(path).convert("RGB")), label   # RGB로 통일 후 전처리
 
 
 # ---------- 모델 ----------
@@ -93,6 +113,8 @@ def parse_args():                                        # 옵션을 읽어서 �
     p.add_argument("--weights", default="results/small_cnn_main/small_cnn_best.pth")  # (이름, default=안 주면 쓸 값) 가중치 파일
     p.add_argument("--data-dir", default="data/validation")                          # 평가할 이미지 폴더 (하위 폴더 = 나이대)
     p.add_argument("--out-dir", default="results/small_cnn_main/eval_val")           # 결과 저장 폴더
+    p.add_argument("--csv-dir", default=None)            # 주면 이 폴더의 val.csv로 평가 (예: splits_csv_v2) / 안 주면 --data-dir 폴더 방식
+    p.add_argument("--image-root", default=None)         # CSV path의 기준 폴더 (예: division_224AFAD-X). --csv-dir와 함께 사용
     p.add_argument("--workers", type=int, default=0)     # (type=정수로 변환) DataLoader 병렬 프로세스 수. 0 = 메인 프로세스만
     return p.parse_args()                                # 실제 명령줄을 읽어 args.weights, args.data_dir ... 로 돌려줌 (- 는 _ 로 바뀜)
 
@@ -122,7 +144,7 @@ def plot_confusion(cm, path):                            # (cm=7×7 개수 행�
     ax.set_yticklabels(BAND_NAMES)                       # y축 = 정답 나이대
     ax.set_xlabel("예측")                                 # 열 = 모델이 고른 나이대
     ax.set_ylabel("정답")                                 # 행 = 실제 나이대
-    ax.set_title("SmallCNN 혼동 행렬 (검증 15,288장)")      # 제목
+    ax.set_title(f"SmallCNN 혼동 행렬 (검증 {cm.sum():,}장)")   # 제목 (장수는 cm 합계 → 데이터에 따라 자동)
     thresh = cm.max() / 2                                # 칸 색이 진하면 흰 글씨, 연하면 검은 글씨로 쓰기 위한 기준
     for i in range(NUM_CLASSES):                         # i = 행 번호 (정답 나이대)
         for j in range(NUM_CLASSES):                     # j = 열 번호 (예측 나이대)
@@ -144,9 +166,16 @@ if __name__ == "__main__":
     os.makedirs(args.out_dir, exist_ok=True)             # (폴더, exist_ok=이미 있어도 에러 안 냄) 결과 폴더 만들기
 
     # ---------- 데이터 ----------
-    val_dataset = datasets.ImageFolder(args.data_dir, transform=val_transform)   # (폴더, transform) 하위 폴더 이름 순서로 0~6 번호
-    print("class_to_idx:", val_dataset.class_to_idx)     # 라벨 순서 확인: {'0 9': 0, '10 19': 1, ..., '60over': 6} 이어야 함
-    print("사진 수:", len(val_dataset))                    # 15288 이어야 함
+    if args.csv_dir:                                     # CSV 모드 (v2): 라벨은 CSV의 band 열
+        if not args.image_root:                          # path 기준 폴더가 없으면 사진을 못 찾음
+            raise SystemExit("--csv-dir 를 쓰면 --image-root 도 주어야 합니다.")
+        val_csv = os.path.join(args.csv_dir, "val.csv")  # 검증 CSV 경로
+        val_dataset = CSVImageDataset(val_csv, args.image_root, val_transform)   # (CSV, 기준 폴더, transform)
+        print("CSV:", val_csv, "| image-root:", args.image_root)
+    else:                                                # 기존 폴더 모드: 하위 폴더 이름 순서로 0~6 번호
+        val_dataset = datasets.ImageFolder(args.data_dir, transform=val_transform)   # (폴더, transform)
+        print("class_to_idx:", val_dataset.class_to_idx) # 라벨 순서 확인: {'0 9': 0, '10 19': 1, ..., '60over': 6} 이어야 함
+    print("사진 수:", len(val_dataset))                    # 예전 15288 / v2 13790 이어야 함
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False,   # shuffle=False: 순서 고정 → predictions.csv 행 = samples 순서
                             num_workers=args.workers)    # (num_workers=병렬 프로세스 수)
 
@@ -170,8 +199,13 @@ if __name__ == "__main__":
     #   labels=0~6: 혹시 한 번도 예측 안 된 나이대가 있어도 7개 모두 포함 / zero_division=0: 0으로 나누면 0점 처리
     macro_f1 = float(f1_score(y, p, average="macro", labels=list(range(NUM_CLASSES)), zero_division=0))
 
+    best_epoch = BEST_EPOCH                              # 기존 모델(18 에폭) 기본값
+    cfg_path = os.path.join(os.path.dirname(args.weights), "config.json")   # 가중치 옆 config.json (unified 학습 코드가 저장)
+    if args.csv_dir and os.path.exists(cfg_path):        # CSV 모드면 새 모델이므로 config.json의 best_epoch 사용
+        with open(cfg_path, encoding="utf-8") as f:      # 읽기
+            best_epoch = json.load(f).get("best_epoch")  # 최고 에폭 번호
     metrics = {"acc": acc, "off1_acc": off1_acc, "macro_f1": macro_f1,   # 팀원 metrics.json과 같은 키
-               "n": int(len(y)), "best_epoch": BEST_EPOCH}
+               "n": int(len(y)), "best_epoch": best_epoch}
     with open(os.path.join(args.out_dir, "metrics.json"), "w", encoding="utf-8") as f:   # (경로, "w"=쓰기) 파일 열기
         json.dump(metrics, f, indent=2)                  # (딕셔너리, 파일, indent=들여쓰기 칸) 보기 좋게 저장
 
@@ -215,11 +249,12 @@ if __name__ == "__main__":
     near = (abs(diff) == 1) & wrong                      # 틀린 것 중 정확히 한 칸 옆 나이대
     print(f"\n오답 {wrong.sum()}장 중 옆 나이대(1칸) 오답: {near.sum()}장 ({near.sum() / wrong.sum():.1%})")
 
-    # ---------- 기록값과 비교 (소수 셋째 자리) ----------
-    ok_acc = round(acc, 3) == round(RECORDED_ACC, 3)     # 반올림한 값이 같으면 True
-    ok_f1 = round(macro_f1, 3) == round(RECORDED_F1, 3)
-    print(f"\n기록값 비교: acc {acc:.4f} vs {RECORDED_ACC:.4f} → {'일치' if ok_acc else '불일치'} | "
-          f"macro_f1 {macro_f1:.4f} vs {RECORDED_F1:.4f} → {'일치' if ok_f1 else '불일치'}")
+    # ---------- 기록값과 비교 (소수 셋째 자리) — 기존 모델(폴더 모드)일 때만 의미 있음 ----------
+    if not args.csv_dir:                                 # CSV 모드(새 모델)는 비교할 기록값이 없어 생략
+        ok_acc = round(acc, 3) == round(RECORDED_ACC, 3) # 반올림한 값이 같으면 True
+        ok_f1 = round(macro_f1, 3) == round(RECORDED_F1, 3)
+        print(f"\n기록값 비교: acc {acc:.4f} vs {RECORDED_ACC:.4f} → {'일치' if ok_acc else '불일치'} | "
+              f"macro_f1 {macro_f1:.4f} vs {RECORDED_F1:.4f} → {'일치' if ok_f1 else '불일치'}")
     print("결과 저장:", args.out_dir)                      # 결과 폴더 위치 안내
 
 # =============================================================================

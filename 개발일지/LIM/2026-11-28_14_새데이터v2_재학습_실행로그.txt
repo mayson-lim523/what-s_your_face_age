@@ -1,0 +1,30 @@
+using device: cuda | AMP: True
+CSV: splits_csv_v2\train.csv / splits_csv_v2\val.csv | image-root: division_224AFAD-X
+증강: 켬
+학습 64353 장 / 검증 13790 장
+파라미터 수: 390695
+나이대별 장수: [11416, 8310, 11000, 11000, 10542, 6781, 5304]
+계산한 가중치: [0.8053, 1.1063, 0.8358, 0.8358, 0.8721, 1.3557, 1.7333]
+팀 가중치 비교(둘째 자리): 불일치 [0.81, 1.11, 0.84, 0.84, 0.87, 1.36, 1.73] vs [0.89, 0.85, 0.85, 0.85, 0.85, 1.51, 1.94]
+에폭당 배치 1005 | 전체 스텝 20100 | 워밍업 1005
+Epoch   1/20 | lr 1.0e-06→1.0e-03 | train loss 1.9051 acc 0.202 | val loss 1.9395 acc 0.215 off1 0.506 F1 0.170 | 249초 ★ best
+Epoch   2/20 | lr 1.0e-03→9.9e-04 | train loss 1.7684 acc 0.269 | val loss 1.8329 acc 0.256 off1 0.555 F1 0.220 | 273초 ★ best
+Epoch   3/20 | lr 9.9e-04→9.7e-04 | train loss 1.6802 acc 0.299 | val loss 1.7633 acc 0.290 off1 0.562 F1 0.235 | 494초 ★ best
+Epoch   4/20 | lr 9.7e-04→9.4e-04 | train loss 1.6284 acc 0.320 | val loss 1.5663 acc 0.349 off1 0.673 F1 0.319 | 348초 ★ best
+Epoch   5/20 | lr 9.4e-04→8.9e-04 | train loss 1.5877 acc 0.336 | val loss 1.5750 acc 0.346 off1 0.644 F1 0.283 | 229초
+Epoch   6/20 | lr 8.9e-04→8.4e-04 | train loss 1.5456 acc 0.350 | val loss 1.6238 acc 0.317 off1 0.602 F1 0.267 | 184초
+Epoch   7/20 | lr 8.4e-04→7.7e-04 | train loss 1.5093 acc 0.363 | val loss 1.4972 acc 0.368 off1 0.704 F1 0.339 | 170초 ★ best
+Epoch   8/20 | lr 7.7e-04→7.0e-04 | train loss 1.4755 acc 0.379 | val loss 1.4156 acc 0.410 off1 0.762 F1 0.387 | 167초 ★ best
+Epoch   9/20 | lr 7.0e-04→6.2e-04 | train loss 1.4485 acc 0.387 | val loss 1.4566 acc 0.392 off1 0.782 F1 0.399 | 162초 ★ best
+Epoch  10/20 | lr 6.2e-04→5.4e-04 | train loss 1.4172 acc 0.399 | val loss 1.5309 acc 0.371 off1 0.739 F1 0.360 | 160초
+Epoch  11/20 | lr 5.4e-04→4.6e-04 | train loss 1.3917 acc 0.410 | val loss 1.4894 acc 0.382 off1 0.721 F1 0.361 | 158초
+Epoch  12/20 | lr 4.6e-04→3.8e-04 | train loss 1.3712 acc 0.417 | val loss 1.3246 acc 0.438 off1 0.807 F1 0.433 | 157초 ★ best
+Epoch  13/20 | lr 3.8e-04→3.0e-04 | train loss 1.3530 acc 0.425 | val loss 1.3349 acc 0.429 off1 0.805 F1 0.426 | 157초
+Epoch  14/20 | lr 3.0e-04→2.3e-04 | train loss 1.3333 acc 0.433 | val loss 1.3913 acc 0.413 off1 0.763 F1 0.396 | 154초
+Epoch  15/20 | lr 2.3e-04→1.6e-04 | train loss 1.3178 acc 0.439 | val loss 1.2909 acc 0.455 off1 0.820 F1 0.444 | 149초 ★ best
+Epoch  16/20 | lr 1.6e-04→1.1e-04 | train loss 1.3059 acc 0.446 | val loss 1.2801 acc 0.454 off1 0.816 F1 0.445 | 145초 ★ best
+Epoch  17/20 | lr 1.1e-04→6.0e-05 | train loss 1.2947 acc 0.448 | val loss 1.2575 acc 0.468 off1 0.832 F1 0.461 | 163초 ★ best
+Epoch  18/20 | lr 6.0e-05→2.7e-05 | train loss 1.2847 acc 0.452 | val loss 1.2660 acc 0.457 off1 0.823 F1 0.448 | 162초
+Epoch  19/20 | lr 2.7e-05→6.8e-06 | train loss 1.2806 acc 0.452 | val loss 1.2674 acc 0.460 off1 0.824 F1 0.453 | 166초
+Epoch  20/20 | lr 6.8e-06→6.8e-12 | train loss 1.2772 acc 0.457 | val loss 1.2611 acc 0.461 off1 0.825 F1 0.453 | 172초
+best val macro-F1 0.4608 (epoch 17) → results\small_cnn_v2_lr1e-3
