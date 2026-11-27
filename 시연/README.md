@@ -15,7 +15,10 @@
 ├── gradcam.py         ← Grad-CAM 모듈 (C-1 ~ C-3, 다른 분석 스크립트에서 import 가능)
 ├── requirements.txt   ← 추가로 필요한 패키지
 ├── .gitignore         ← 가중치(.pth, .pt)·사진은 커밋하지 않음
-└── weights/           ← 가중치 파일을 넣는 곳 (커밋 안 됨, 직접 복사)
+├── tools/             ← README 5-1 수치를 다시 만드는 점검 스크립트
+│   ├── measure_margins.py   (학습 사진의 얼굴 상자 크기·위치 → 여백)
+│   └── compare_crop.py      (원본 vs 검출·자르기 예측 비교)
+└── weights/           ← 팀원 모델 가중치를 넣는 곳 (커밋 안 됨, 직접 복사)
     ├── small_cnn_best.pth
     ├── resnet50_best.pt        (있으면 드롭다운에 나옴)
     └── convnext_tiny_best.pt   (있으면 드롭다운에 나옴)
@@ -37,12 +40,7 @@ pip install -r 시연\requirements.txt
 
 **작은 CNN (기본: v2 가중치)** — `작은CNN\results\small_cnn_v2_lr1e-3\small_cnn_best.pth` 를 바로 읽습니다.
 새 데이터(`splits_csv_v2`)로 학습한 17 에폭 가중치입니다 (검증 macro-F1 0.461, 작은CNN 개발일지 14).
-가중치 파일은 저장소에 올리지 않으므로, 학습한 PC의 `results\small_cnn_v2_lr1e-3\small_cnn_best.pth` 를 위 위치에 복사합니다.
-
-```
-mkdir 작은CNN\results\small_cnn_v2_lr1e-3
-copy <학습 폴더>\results\small_cnn_v2_lr1e-3\small_cnn_best.pth 작은CNN\results\small_cnn_v2_lr1e-3\
-```
+이 파일(1.5MB)은 **저장소에 올라가 있어** 내려받기만 하면 바로 실행됩니다 (results 폴더 중 best 가중치만 예외로 올림).
 
 예전 가중치나 다른 실험 가중치는 `--weights` 로 지정합니다 (예: `--weights 시연\weights\small_cnn_best.pth`).
 
@@ -130,6 +128,13 @@ v2 학습 사진(`division_224AFAD-X/training`) 나이대별 300장 = 2,100장�
 | 2배 확대 (448×448) | 210 (나이대별 30) | 180 | 145 (81%) | 153 (85%) |
 | 448 회색 바탕 가운데에 원본 (얼굴 주변에 배경이 있는 사진) | 10 | 7 | **5 (71%)** | 2 (29%) |
 | 448 회색 바탕 가운데에 원본 | 210 | 177 | **132 (75%)** | 106 (60%) |
+
+**다시 만들기** — 사진·CSV가 있는 프로젝트 폴더에서 (CPU, 각 1~2분, 위 표의 수치가 그대로 나옴):
+
+```
+python <저장소>\시연\tools\measure_margins.py --csv splits_csv_v2\train.csv --image-root division_224AFAD-X
+python <저장소>\시연\tools\compare_crop.py --csv splits_csv_v2\val.csv --image-root division_224AFAD-X
+```
 
 - 2배 확대만 하면 예전 여백이 조금 더 같게 나옵니다. 학습 사진은 얼굴이 사진을 거의 채워서, 여백 0.15로 넓혀도 사진 끝에서 잘려 결국 **원본 전체**가 들어가기 때문입니다.
 - 실제 시연처럼 얼굴 주변에 배경이 있으면 새 여백이 원본과 훨씬 비슷하게 예측합니다 (검출 중 75% vs 60%).
