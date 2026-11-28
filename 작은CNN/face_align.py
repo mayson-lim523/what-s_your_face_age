@@ -8,7 +8,8 @@
 #     코드가 없어서(팀원 코드는 분류·분할만 함), YuNet 상자 기준 여백을 학습 사진에서 거꾸로 재서 맞춘다.
 #
 #   [순서]
-#     ① 사진 둘레에 검은 테두리 → 얼굴이 사진 끝까지 찬 사진도 검출되게
+#     ① 사진 둘레에 테두리(가장자리 픽셀 복제) → 얼굴이 사진 끝까지 찬 사진도 검출되게.
+#        검은색 대신 복제로 채워서, 자를 범위가 사진 밖으로 나가도 검은 띠가 생기지 않게 함
 #     ② YuNet 검출 (큰 사진은 긴 변 640으로 줄여 검출 — YuNet은 300픽셀 이하 얼굴에 맞게 학습됨)
 #     ③ 가장 큰 얼굴 1개 선택
 #     ④ (정렬 켬) 두 눈을 잇는 선이 수평이 되게 회전 → 회전된 사진에서 다시 검출
@@ -37,8 +38,9 @@ SCORE_TH = 0.6            # 얼굴 점수 기준 (기본 0.9는 꽉 찬 얼굴�
 # 여백 (왼, 위, 오른, 아래) — 상자 크기 대비. face_crop_measure.py로 학습 사진(FairFace·UTKFace)에서 잰 값,
 # 두 출처의 중앙값을 학습 데이터 비율 70:19로 가중 평균 (개발일지 2026-11-28_Gradio시연.md)
 MARGINS = {
-    False: (0.106, -0.104, 0.110, 0.038),   # 가중 IoU 중앙값 0.821 (FairFace 0.810, UTKFace 0.865)
-    True: (0.106, -0.101, 0.110, 0.037),    # 가중 IoU 중앙값 0.814 → 원본 재현이 조금 나빠 기본값은 끔
+    # 테두리를 가장자리 복제로 바꾼 뒤 다시 잰 값 (검은 테두리일 때는 0.106, -0.104, 0.110, 0.038)
+    False: (0.123, -0.141, 0.128, 0.030),   # 가중 IoU 중앙값 0.809 (FairFace 0.794, UTKFace 0.868)
+    True: (0.125, -0.142, 0.126, 0.029),    # 가중 IoU 중앙값 0.795 → 원본 재현이 조금 나빠 기본값은 끔
 }
 DEFAULT_ALIGN = False
 
@@ -87,7 +89,7 @@ def locate(rgb, align):
     """→ dict(canvas, box(x,y,w,h), n_faces, pad, M, angle) 또는 얼굴 없으면 None"""
     H, W = rgb.shape[:2]
     p = int(max(H, W) * PAD_RATIO)
-    canvas = cv2.copyMakeBorder(rgb, p, p, p, p, cv2.BORDER_CONSTANT, value=0)
+    canvas = cv2.copyMakeBorder(rgb, p, p, p, p, cv2.BORDER_REPLICATE)
     faces = detect(canvas)
     if len(faces) == 0:
         return None
@@ -98,7 +100,7 @@ def locate(rgb, align):
         angle = math.degrees(math.atan2(ly - ry, lx - rx))
         M = cv2.getRotationMatrix2D(((rx + lx) / 2, (ry + ly) / 2), angle, 1.0)
         canvas = cv2.warpAffine(canvas, M, (canvas.shape[1], canvas.shape[0]), flags=cv2.INTER_LINEAR,
-                                borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+                                borderMode=cv2.BORDER_REPLICATE)
         c = M @ np.array([box[0] + box[2] / 2, box[1] + box[3] / 2, 1.0])
         again = detect(canvas)
         if len(again):
@@ -111,8 +113,8 @@ def locate(rgb, align):
 
 # =============================================================================
 #   ▶ [모듈 3] 자르기
-#   - 상자 + 여백 → 캔버스 안으로 자르고 224×224로 맞춤. 캔버스 밖은 잘라냄(테두리가 검은색이라 사진 끝 얼굴은
-#     검은 띠가 들어갈 수 있음 — UTKFace 학습 사진에도 회전 쐐기가 있음)
+#   - 상자 + 여백 → 캔버스 안으로 자르고 224×224로 맞춤. 사진 밖으로 나간 부분은 테두리(가장자리 픽셀 복제)로
+#     채워져 있음. 캔버스(사진 + 긴 변 × 0.25)보다 더 나가면 잘라냄
 # =============================================================================
 
 def crop_rect(box, margins):

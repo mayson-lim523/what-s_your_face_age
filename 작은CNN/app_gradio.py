@@ -27,7 +27,7 @@ import tempfile
 import time
 from pathlib import Path
 
-# ponytail: 앱을 2개 동시에 띄우면 나중 것이 먼저 것의 폴더를 지움 — 시연은 1개만 띄우므로 이대로 둠
+# 주의: 앱을 2개 동시에 띄우면 나중 것이 먼저 것의 폴더를 지움 — 시연은 1개만 띄우므로 이대로 둠
 for old in Path(tempfile.gettempdir()).glob("face_age_gradio_*"):   # 강제 종료로 남은 예전 실행의 임시 폴더 삭제
     shutil.rmtree(old, ignore_errors=True)
 TMP = Path(tempfile.mkdtemp(prefix="face_age_gradio_"))
