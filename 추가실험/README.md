@@ -22,6 +22,10 @@
 │   ├── eval_blur.py       ← 검증 사진에 인공 흐림·저해상도를 입혀 평가
 │   ├── analyze_quality.py ← 사진 선명도·얼굴 수별 정확도 분석 (MTCNN)
 │   └── eval_paste.py      ← 다른 얼굴을 구석에 붙여 평가 (+ 다른 얼굴 가리기)
+├── results/
+│   ├── eval_3groups.csv   ← ① 묶어 채점 결과 (ResNet50, ConvNeXt)
+│   ├── blur_eval.csv      ← ② 흐림 정도별 평가 (기존 vs 흐림 증강)
+│   └── paste_eval.csv     ← ③ 얼굴 붙임·가리기 조건별 평가 (기존 vs 붙이기 증강)
 └── images/                ← 실행 화면 캡처
 ```
 
