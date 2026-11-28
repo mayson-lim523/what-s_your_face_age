@@ -44,7 +44,7 @@ from CNN_4layers_unified import SmallCNN                     # noqa: E402
 
 MODEL_NAMES = ["small_cnn", "convnext_tiny", "resnet50"]
 DEFAULT_WEIGHTS = {
-    "small_cnn": os.path.join(HERE, "results", "small_cnn_v2_lr1e-3", "best.pt"),
+    "small_cnn": os.path.join(HERE, "results", "small_cnn_v2_lr1e-3", "small_cnn_best.pth"),   # git에 있는 파일 (best.pt와 같은 가중치)
     "convnext_tiny": os.path.join(ROOT, "weights", "convnext_tiny", "best.pt"),
     "resnet50": os.path.join(ROOT, "weights", "resnet50", "best.pt"),
 }

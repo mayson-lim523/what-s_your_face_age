@@ -60,16 +60,12 @@ python -m venv .venv
 
 | 모델 | 읽는 경로 | git에 있나 |
 |---|---|---|
-| 작은 CNN | `작은CNN\results\small_cnn_v2_lr1e-3\best.pt` | **없음** (아래 임시 안내) |
+| 작은 CNN | `작은CNN\results\small_cnn_v2_lr1e-3\small_cnn_best.pth` | **있음** — clone하면 바로 읽힘 |
 | ConvNeXt-Tiny | `weights\convnext_tiny\best.pt` | 없음 — 직접 복사 |
 | ResNet-50 | `weights\resnet50\best.pt` | 없음 — 직접 복사 |
 
 - **팀원 가중치**는 `.gitignore`(`weights/`, `*.pt`) 때문에 저장소에 없습니다. 팀원에게 받은 `best.pt`(팀원 실험 폴더 `results\v2_convnext\`, `results\v2_resnet50\`)를 위 이름으로 복사하세요.
-- **작은 CNN 임시 안내**: 저장소에는 같은 가중치가 `small_cnn_best.pth`(가중치만 저장한 형식)로만 올라가 있습니다. 두 파일은 가중치가 완전히 같고(비교 결과 최대 차이 0), `load_model`은 두 형식을 모두 읽습니다. 새로 clone했다면 한 번만 복사하세요.
-
-  ```bat
-  copy 작은CNN\results\small_cnn_v2_lr1e-3\small_cnn_best.pth 작은CNN\results\small_cnn_v2_lr1e-3\best.pt
-  ```
+- 새로 clone한 PC에서는 **ConvNeXt-Tiny · ResNet-50 가중치 두 개만 복사**하면 앱이 켜집니다.
 
 ## 4. 실행 (Windows cmd, 저장소 최상위에서)
 
@@ -172,7 +168,7 @@ set PYTHONIOENCODING=utf-8
 - [x] 새 데이터셋(v2)으로 재학습한 작은 CNN 가중치로 교체
 - [x] ResNet-50 · ConvNeXt v2 가중치로 세 모델 비교 · Grad-CAM 확인 (`--selftest`)
 - [x] Grad-CAM 글 설명 (영역별 주목 비중 + 가림 실험)
-- [ ] 작은 CNN 기본 경로 `best.pt`가 git에 없음 → 새 clone에서 바로 실행되게 정리 (지금은 3절 복사 필요)
+- [x] 작은 CNN 기본 경로를 git에 있는 `small_cnn_best.pth`로 변경 (새 clone에서 바로 읽힘)
 - [ ] 얼굴 크기 지름길: 재학습으로 줄이면(확대·축소 증강 또는 모든 출처를 같은 기준으로 다시 자르기) 새 가중치로 교체
 - [ ] 실제 웹캠 사진 여러 장으로 정렬 켬/끔 비교
 - [ ] AAF처럼 넓게 잘린 사진에 맞춘 여백도 필요한지 결정 (지금은 FairFace·UTKFace 기준)
