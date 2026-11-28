@@ -448,7 +448,7 @@ python step4_train.py --name full20_convnext --model convnext_tiny --train-csv s
 - [x] 공정한 구조 비교: ImageNet-1k 가중치(`convnext_tiny.fb_in1k`)로 다시 학습 (2-5, 3-4)
 - [x] 증강 유무 비교 (2-6, 3-6)
 
-- [ ] 최종 모델 정하기(새 데이터 검증 결과로는 ImageNet-1k 가중치 ConvNeXt-Tiny, 증강 있음 `v2_convnext`의 4에폭 모델). 그 뒤 시험 데이터로 **한 번만** 평가합니다.
+- [x] 최종 모델 정하기(새 데이터 검증 결과로는 ImageNet-1k 가중치 ConvNeXt-Tiny, 증강 있음 `v2_convnext`의 4에폭 모델). 그 뒤 시험 데이터로 **한 번만** 평가합니다.
   ```
   python step5_evaluate.py --exp-dir results/v2_convnext --split-csv splits_csv_v2/test.csv --image-root data_v2 --tag test
   ```
@@ -470,3 +470,27 @@ python step4_train.py --name full20_convnext --model convnext_tiny --train-csv s
 | 3그룹(소아청소년·성인·노인) | 정확도 58.6% → 88.2%, macro-F1 0.592 → 0.830 |
 | 흐린 사진 + 흐림 증강(`--blur-aug`) | 강한 흐림 F1 0.546 → 0.565, 저해상도 56px 0.564 → 0.577 |
 | 여러 얼굴 사진 + 얼굴 붙이기 증강(`--paste-aug 0.3`) | 얼굴 붙인 사진 F1 0.569 → 0.585 |
+
+---
+
+## 6. 시험 데이터 최종 평가 (2026-11-28)
+
+모델과 방법을 모두 정한 뒤, 지금까지 한 번도 쓰지 않은 **시험 데이터 13,789장**으로 한 번만 평가했습니다.
+
+```
+python step5_evaluate.py --exp-dir results/v2_convnext --split-csv splits_csv_v2/test.csv --image-root data_v2 --tag test
+python step5_evaluate.py --exp-dir results/v2_resnet50 --split-csv splits_csv_v2/test.csv --image-root data_v2 --tag test
+python step5_evaluate.py --summary results --tag test
+```
+
+![시험 데이터 결과](images/25_v2_test_summary.png)
+
+| 모델 (증강 있음) | 검증 정확도 | 시험 정확도 | 검증 한 칸 차이 | 시험 한 칸 차이 | 검증 macro-F1 | 시험 macro-F1 |
+|---|---|---|---|---|---|---|
+| 작은 CNN (임성빈) | 46.8% | 45.7% | 83.2% | 83.0% | 0.461 | 0.449 |
+| ResNet-50 | 56.6% | 55.9% | 92.1% | 92.2% | 0.565 | 0.557 |
+| **ConvNeXt-Tiny** | 58.6% | **57.7%** | 94.2% | **94.2%** | 0.592 | **0.582** |
+
+- 세 모델 모두 검증보다 macro-F1이 0.01 정도만 낮습니다. 처음 보는 사진에서도 성능이 거의 그대로 유지됩니다.
+- 순서도 그대로입니다: ConvNeXt > ResNet > 작은 CNN. 시험 데이터에서도 ConvNeXt − ResNet = +0.025.
+- 요약표의 `v2_convnext` 줄에서 모델·학습방식·학습률이 `NaN`인 것은 이 실험 폴더의 `config.json`에 그 칸이 없어서이고, 결과 숫자에는 영향이 없습니다.

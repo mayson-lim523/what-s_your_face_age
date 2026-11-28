@@ -528,10 +528,34 @@ python step5_evaluate.py --exp-dir results/noaug_resnet50 --split-csv splits_csv
 - [x] 이어하기 때 조기 종료 조건을 다시 확인하도록 학습 코드 수정 (2-12)
 - [x] 비교 실험: 증강 끄기 (2-13, 3-3)
 - [ ] 비교 실험: 학습률 0.001 / 0.00001, 마지막 층만 학습
-- [ ] 비교 결과로 최종 모델을 정한 뒤, 시험 데이터로 **한 번만** 평가
+- [x] 비교 결과로 최종 모델을 정한 뒤, 시험 데이터로 **한 번만** 평가 (아래 시험 데이터 최종 평가)
 - [ ] Grad-CAM으로 모델이 얼굴의 어느 부분을 보고 판단했는지 확인
 
 ## 참고 사항
 
 - `split_result_224`에는 사진마다 어느 데이터셋(FairFace, AAF 등)에서 왔는지에 대한 정보가 없습니다. 그래서 데이터셋별 성능 비교(`per_group.csv`)는 `unknown` 하나로만 나옵니다.
 - 시험 데이터(testing)는 최종 모델을 평가하기 전까지 사용하지 않습니다.
+
+---
+
+## 7. 시험 데이터 최종 평가 (2026-11-28)
+
+모델과 방법을 모두 정한 뒤, 지금까지 한 번도 쓰지 않은 **시험 데이터 13,789장**으로 한 번만 평가했습니다.
+
+```
+python step5_evaluate.py --exp-dir results/v2_convnext --split-csv splits_csv_v2/test.csv --image-root data_v2 --tag test
+python step5_evaluate.py --exp-dir results/v2_resnet50 --split-csv splits_csv_v2/test.csv --image-root data_v2 --tag test
+python step5_evaluate.py --summary results --tag test
+```
+
+![시험 데이터 결과](images/32_v2_test_summary.png)
+
+| 모델 (증강 있음) | 검증 정확도 | 시험 정확도 | 검증 한 칸 차이 | 시험 한 칸 차이 | 검증 macro-F1 | 시험 macro-F1 |
+|---|---|---|---|---|---|---|
+| 작은 CNN (임성빈) | 46.8% | 45.7% | 83.2% | 83.0% | 0.461 | 0.449 |
+| ResNet-50 | 56.6% | 55.9% | 92.1% | 92.2% | 0.565 | 0.557 |
+| **ConvNeXt-Tiny** | 58.6% | **57.7%** | 94.2% | **94.2%** | 0.592 | **0.582** |
+
+- 세 모델 모두 검증보다 macro-F1이 0.01 정도만 낮습니다. 처음 보는 사진에서도 성능이 거의 그대로 유지됩니다.
+- 순서도 그대로입니다: ConvNeXt > ResNet > 작은 CNN. 시험 데이터에서도 ConvNeXt − ResNet = +0.025.
+- 요약표의 `v2_convnext` 줄에서 모델·학습방식·학습률이 `NaN`인 것은 이 실험 폴더의 `config.json`에 그 칸이 없어서이고, 결과 숫자에는 영향이 없습니다.
