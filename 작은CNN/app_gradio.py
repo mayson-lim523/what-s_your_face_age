@@ -5,6 +5,10 @@
 #
 #   [실행] 저장소 최상위에서:  .venv\Scripts\python 작은CNN\app_gradio.py   → http://127.0.0.1:7860
 #   [점검] .venv\Scripts\python 작은CNN\app_gradio.py --selftest --image-root <division_224AFAD-X 폴더>
+#   [팀원 공유] 기본은 이 PC에서만(127.0.0.1). 필요할 때만 켬
+#     --lan              같은 와이파이·네트워크에서 접속 허용(0.0.0.0), 실행할 때 이 PC의 IP 주소 출력
+#     --share            Gradio 공유 링크(https://xxxx.gradio.live) — 인터넷 어디서나 접속 가능
+#     --auth 아이디:비번  로그인 걸기. --share·--lan인데 --auth가 없으면 경고
 #
 #   [흐름] 사진 → face_align.crop_face (YuNet 검출 → 가장 큰 얼굴 → (정렬) → 학습 사진과 같은 여백으로 자르기 → 224)
 #          → gradcam_utils.preprocess (팀 검증 전처리) → 모델 예측 + Grad-CAM (예측 1위 나이대 기준)
@@ -13,7 +17,8 @@
 #     - Gradio는 업로드·웹캠 사진과 출력 그림을 임시 폴더에 파일로 둔다 (브라우저에 보내려면 필요)
 #     - 그 폴더를 이 앱 전용 새 임시 폴더로 바꾸고(GRADIO_TEMP_DIR, gradio import 전에),
 #       delete_cache로 1분마다 1분 지난 파일 삭제 + 앱 종료 때 폴더째 삭제
-#     - 앱 코드 자체는 사진을 메모리(PIL)로만 다룬다. share=True(공개 링크) 안 씀, 127.0.0.1에서만 열림
+#     - 앱 코드 자체는 사진을 메모리(PIL)로만 다룬다. 기본은 127.0.0.1에서만 열림 (--share/--lan일 때만 밖에서 접속)
+#     - --share를 켜면 사진이 Gradio 공유 서버(gradio.live)를 거쳐 전달된다. 파일로 남는 곳은 여전히 이 PC 임시 폴더뿐
 #     - Gradio 사용 통계 전송도 끔
 #
 # #############################################################################
@@ -189,13 +194,52 @@ def selftest(image_root):
     print(f"   (그중 얼굴 검출·자르기만: {(time.perf_counter() - t) / 5:.3f}초)")
 
 
+# =============================================================================
+#   ▶ [모듈 5] 공유 범위(이 PC / 같은 네트워크 / 공유 링크)와 로그인
+#   - 로컬 IP: UDP 소켓을 바깥 주소로 "연결"만 해서(실제로 보내는 데이터 없음) 이 PC가 쓰는 네트워크 주소를 알아냄
+# =============================================================================
+
+def local_ip():
+    import socket
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+    except OSError:
+        return socket.gethostbyname(socket.gethostname())
+
+
+def launch_options(a):
+    """명령행 옵션 → demo.launch 인자. 경고와 접속 주소 안내도 여기서 출력"""
+    if (a.share or a.lan) and not a.auth:
+        who = "인터넷의 누구나" if a.share else "같은 네트워크의 누구나"
+        print(f"[경고] --auth 없이 공유합니다. 주소를 아는 {who} 접속해 사진을 올릴 수 있습니다. "
+              f"--auth 아이디:비번 을 함께 쓰세요.", flush=True)
+    if a.lan:
+        print(f"[같은 네트워크 접속 주소] http://{local_ip()}:{a.port}  "
+              f"(Windows 방화벽 창이 뜨면 '개인 네트워크' 허용)", flush=True)
+    return dict(server_name="0.0.0.0" if a.lan else "127.0.0.1", server_port=a.port, share=a.share,
+                auth=tuple(a.auth.split(":", 1)) if a.auth else None,
+                auth_message="인공지능 4조 얼굴 나이대 분류 시연 — 팀에서 받은 아이디·비밀번호를 입력하세요")
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--selftest", action="store_true")
     ap.add_argument("--image-root", type=Path)
     ap.add_argument("--port", type=int, default=7860)
+    ap.add_argument("--share", action="store_true", help="Gradio 공유 링크(gradio.live) 생성")
+    ap.add_argument("--lan", action="store_true", help="같은 네트워크에서 접속 허용 (0.0.0.0)")
+    ap.add_argument("--auth", metavar="아이디:비번", help="로그인 걸기")
     a = ap.parse_args()
+    if a.auth and (":" not in a.auth or not all(a.auth.split(":", 1))):
+        ap.error("--auth는 아이디:비번 형식이어야 합니다 (예: --auth team4:비밀번호)")
     if a.selftest:
         selftest(a.image_root)
     else:
-        build().launch(server_name="127.0.0.1", server_port=a.port, share=False)
+        demo = build()
+        _, _, share_url = demo.launch(**launch_options(a), prevent_thread_lock=True)
+        if a.share and not share_url:
+            print("[공유 링크 실패] gradio.live 서버에 연결하지 못했습니다(인터넷·Gradio 서버 상태). "
+                  "앱은 이 PC에서만 열려 있습니다. 같은 네트워크 팀원에게는 --lan 을 쓰세요.", flush=True)
+        demo.block_thread()                     # Ctrl+C → 서버 닫고 정상 종료 → atexit로 임시 폴더 삭제
