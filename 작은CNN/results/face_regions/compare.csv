@@ -1,0 +1,28 @@
+﻿photo,model,band,prob,share_top,share_top_pct,mouth_share,occl_top,occl_top_pp,match
+1(AAF),small_cnn,10대,41.1,오른쪽 눈가,27.8,5.4,이마,-8.7,False
+1(AAF),convnext_tiny,20대,57.5,기타(머리·배경),31.1,1.7,이마,-53.3,False
+1(AAF),resnet50,10대,54.3,오른쪽 볼,29.0,8.0,이마,-44.7,False
+2(AAF),small_cnn,40대,31.2,기타(머리·배경),18.9,9.4,오른쪽 볼,-17.3,False
+2(AAF),convnext_tiny,50대,55.9,입,33.5,33.5,입,-31.4,True
+2(AAF),resnet50,40대,49.0,입,35.1,35.1,코,-34.9,False
+3(AAF),small_cnn,20대,53.8,기타(머리·배경),25.7,12.4,입,-12.0,False
+3(AAF),convnext_tiny,20대,77.1,왼쪽 눈가,32.4,11.0,기타(머리·배경),-21.4,False
+3(AAF),resnet50,20대,71.7,오른쪽 눈가,20.3,11.0,입,-18.4,False
+4(FairFace),small_cnn,10대,39.7,기타(머리·배경),25.3,4.7,왼쪽 눈가,-10.0,False
+4(FairFace),convnext_tiny,0-9세,50.2,왼쪽 볼,45.2,1.9,왼쪽 눈가,-49.5,False
+4(FairFace),resnet50,10대,65.6,왼쪽 볼,31.8,20.3,오른쪽 눈가,-53.3,False
+5(FairFace),small_cnn,30대,24.5,기타(머리·배경),43.7,11.7,오른쪽 볼,-5.9,False
+5(FairFace),convnext_tiny,40대,52.3,입,33.7,33.7,오른쪽 볼,-37.1,False
+5(FairFace),resnet50,30대,65.2,입,28.8,28.8,턱,-23.6,False
+6(FairFace),small_cnn,30대,31.2,기타(머리·배경),34.3,9.7,이마,-6.5,False
+6(FairFace),convnext_tiny,20대,56.1,기타(머리·배경),21.1,19.0,기타(머리·배경),-21.7,True
+6(FairFace),resnet50,20대,60.1,입,26.8,26.8,기타(머리·배경),-16.2,False
+7(UTKFace),small_cnn,60세 이상,62.0,입,24.5,24.5,입,-30.5,True
+7(UTKFace),convnext_tiny,60세 이상,99.3,입,41.5,41.5,왼쪽 볼,-8.2,False
+7(UTKFace),resnet50,60세 이상,99.9,입,22.1,22.1,입,-74.9,True
+8(UTKFace),small_cnn,10대,21.2,왼쪽 눈가,20.5,4.5,오른쪽 눈가,-6.3,False
+8(UTKFace),convnext_tiny,0-9세,77.3,오른쪽 눈가,20.9,16.8,왼쪽 볼,-40.2,False
+8(UTKFace),resnet50,0-9세,59.8,오른쪽 눈가,32.2,7.9,이마,-21.2,False
+9(UTKFace),small_cnn,40대,29.3,오른쪽 눈가,22.6,14.1,왼쪽 볼,-13.8,False
+9(UTKFace),convnext_tiny,40대,56.1,입,26.3,26.3,왼쪽 볼,-16.5,False
+9(UTKFace),resnet50,40대,50.3,입,32.4,32.4,왼쪽 볼,-25.0,False

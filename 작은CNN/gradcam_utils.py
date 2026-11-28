@@ -111,7 +111,8 @@ class GradCAM:
     def _save(self, module, inp, out):
         a = inp[0] if self.use_input else out
         self.act = a.detach()
-        a.register_hook(lambda g: setattr(self, "grad", g.detach()))   # 역전파 때 이 텐서의 기울기 저장
+        if a.requires_grad:                # no_grad 예측(가림 실험 등)에서는 hook 없이 통과
+            a.register_hook(lambda g: setattr(self, "grad", g.detach()))   # 역전파 때 이 텐서의 기울기 저장
 
     def __call__(self, x, class_idx=None):
         """x: (B,3,224,224) → (히트맵 (B,224,224) 0~1 numpy, 사용한 나이대 (B,), 예측 확률 (B,7))

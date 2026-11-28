@@ -83,10 +83,12 @@ def detect(rgb):
 #   - 정렬: 오른눈→왼눈 선의 기울기만큼 눈 가운데를 중심으로 회전. 회전 후 다시 검출해 상자를 새로 받고,
 #     못 찾으면 원래 상자 중심만 회전 행렬로 옮겨 쓴다
 #   - M: 원래 사진(테두리 포함) → 캔버스 변환 (2×3). 측정에서 원래 사진 테두리 위치를 계산할 때 씀
+#   - lm: 5점 (5,2) 캔버스 좌표. 상자와 같은 검출에서 가져옴(정렬 켬이면 다시 검출한 얼굴, 못 찾으면 M으로 옮김)
+#     → 히트맵 설명(영역 나누기)용으로만 쓰고 모델 입력에는 넣지 않는다
 # =============================================================================
 
 def locate(rgb, align):
-    """→ dict(canvas, box(x,y,w,h), n_faces, pad, M, angle) 또는 얼굴 없으면 None"""
+    """→ dict(canvas, box(x,y,w,h), lm(5,2), n_faces, pad, M, angle) 또는 얼굴 없으면 None"""
     H, W = rgb.shape[:2]
     p = int(max(H, W) * PAD_RATIO)
     canvas = cv2.copyMakeBorder(rgb, p, p, p, p, cv2.BORDER_REPLICATE)
@@ -94,7 +96,7 @@ def locate(rgb, align):
     if len(faces) == 0:
         return None
     f = faces[np.argmax(faces[:, 2] * faces[:, 3])]
-    box, M, angle = f[:4].copy(), np.float32([[1, 0, 0], [0, 1, 0]]), 0.0
+    box, lm, M, angle = f[:4].copy(), f[4:14].reshape(5, 2).copy(), np.float32([[1, 0, 0], [0, 1, 0]]), 0.0
     if align:
         (rx, ry), (lx, ly) = f[4:6], f[6:8]
         angle = math.degrees(math.atan2(ly - ry, lx - rx))
@@ -105,10 +107,12 @@ def locate(rgb, align):
         again = detect(canvas)
         if len(again):
             centers = again[:, :2] + again[:, 2:4] / 2
-            box = again[np.argmin(((centers - c) ** 2).sum(1)), :4].copy()
+            g = again[np.argmin(((centers - c) ** 2).sum(1))]
+            box, lm = g[:4].copy(), g[4:14].reshape(5, 2).copy()
         else:
             box[:2] = c - box[2:4] / 2
-    return dict(canvas=canvas, box=box, n_faces=len(faces), pad=p, M=M, angle=angle)
+            lm = np.c_[lm, np.ones(5)] @ M.T
+    return dict(canvas=canvas, box=box, lm=lm, n_faces=len(faces), pad=p, M=M, angle=angle)
 
 
 # =============================================================================
@@ -123,17 +127,22 @@ def crop_rect(box, margins):
     return x - w * ml, y - h * mt, x + w * (1 + mr), y + h * (1 + mb)
 
 
-def crop_face(image, align=DEFAULT_ALIGN, margins=None):
-    """PIL 사진 → (224×224 PIL 얼굴, 찾은 얼굴 수). 얼굴이 없으면 (None, 0)"""
+def crop_face(image, align=DEFAULT_ALIGN, margins=None, return_landmarks=False):
+    """PIL 사진 → (224×224 PIL 얼굴, 찾은 얼굴 수). 얼굴이 없으면 (None, 0)
+    return_landmarks=True면 (얼굴, 수, 5점 (5,2) 224 좌표) — 자르기와 같은 변환(평행이동 + 224로 늘림)을 적용"""
     loc = locate(np.asarray(image.convert("RGB")), align)
     if loc is None:
-        return None, 0
+        return (None, 0, None) if return_landmarks else (None, 0)
     cv_ = loc["canvas"]
     l, t, r, b = crop_rect(loc["box"], margins or MARGINS[align])
     l, t = max(int(round(l)), 0), max(int(round(t)), 0)
     r, b = min(int(round(r)), cv_.shape[1]), min(int(round(b)), cv_.shape[0])
     face = Image.fromarray(cv_[t:b, l:r]).resize((224, 224), Image.BILINEAR)
-    return face, loc["n_faces"]
+    if not return_landmarks:
+        return face, loc["n_faces"]
+    # PIL resize는 픽셀 가장자리 기준(0~W → 0~224)이라 좌표도 같은 비율로 늘리면 됨
+    lm = (loc["lm"] - (l, t)) * (224 / (r - l), 224 / (b - t))
+    return face, loc["n_faces"], lm
 
 
 # =============================================================================

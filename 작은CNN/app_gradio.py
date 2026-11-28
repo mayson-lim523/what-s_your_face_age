@@ -12,6 +12,8 @@
 #
 #   [흐름] 사진 → face_align.crop_face (YuNet 검출 → 가장 큰 얼굴 → (정렬) → 학습 사진과 같은 여백으로 자르기 → 224)
 #          → gradcam_utils.preprocess (팀 검증 전처리) → 모델 예측 + Grad-CAM (예측 1위 나이대 기준)
+#          → face_regions: YuNet 5점으로 얼굴 영역 나누기 → 영역별 주목 비중 (+ 가림 실험 체크 시 영역별 블러 후 재예측)
+#            5점은 설명용으로만 쓰고 모델 입력에는 넣지 않음
 #
 #   [사진을 디스크에 남기지 않기]
 #     - Gradio는 업로드·웹캠 사진과 출력 그림을 임시 폴더에 파일로 둔다 (브라우저에 보내려면 필요)
@@ -43,14 +45,17 @@ atexit.register(shutil.rmtree, TMP, ignore_errors=True)
 import gradio as gr  # noqa: E402
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
+from PIL import Image  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import face_align as fa  # noqa: E402
+import face_regions as fr  # noqa: E402
 from gradcam_utils import BANDS, GradCAM, MODEL_NAMES, load_model, overlay, preprocess  # noqa: E402
 
 TITLES = {"small_cnn": "작은 CNN", "convnext_tiny": "ConvNeXt-Tiny", "resnet50": "ResNet-50"}
 NOTICE = "예측은 겉보기 나이 기준이며 참고용입니다. 업로드한 사진은 저장하지 않습니다."
+REGION_NOTICE = "영역 구분은 설명용이며 예측에는 쓰이지 않습니다."
 
 
 # =============================================================================
@@ -65,6 +70,9 @@ torch.backends.cuda.matmul.allow_tf32 = False
 CAMS = {n: GradCAM(load_model(n, device=DEVICE), n) for n in MODEL_NAMES}
 for _cam in CAMS.values():                      # 미리 한 번 실행 — 안 하면 첫 사진만 3~4초 걸림 (CUDA 첫 실행 준비)
     _cam(torch.zeros(1, 3, 224, 224))
+    with torch.no_grad():                       # 가림 실험 배치(영역 9장)도 첫 실행이 느려서 같이 준비
+        _cam.model(torch.zeros(len(fr.REGIONS), 3, 224, 224, device=DEVICE))
+fa.crop_face(Image.new("RGB", (640, 480)))      # YuNet 검출기도 첫 실행 준비 (빈 사진이라 결과는 없음)
 
 
 # =============================================================================
@@ -79,25 +87,37 @@ def predict(face, name):
 
 # =============================================================================
 #   ▶ [모듈 3] 화면 처리 — 사진 → 얼굴 자르기 → 모델 1개 또는 3개
-#   - 출력 순서: 안내 문구, 잘라낸 얼굴, (확률, Grad-CAM, 제목) × 3칸. 단일 모드면 1칸만 보임
+#   - 출력 순서: 안내 문구, 잘라낸 얼굴, (확률, Grad-CAM, 제목, 글 설명) × 3칸. 단일 모드면 1칸만 보임
+#   - 글 설명: 지금 보이는 Grad-CAM(예측 1위 기준)의 영역별 주목 비중 + (켜면) 가림 실험 표
 # =============================================================================
 
-def run(image, model_title, compare, align):
-    empty = [None, None, gr.update(visible=False)] * 3
+def explain(face, labels, name, label, heat, occlude):
+    band = max(label, key=label.get)
+    text = fr.share_text(fr.attention_share(heat, labels))
+    if occlude:
+        p = fr.occlusion(CAMS[name].model, face, labels, BANDS.index(band), preprocess)
+        text += "\n\n" + fr.occlusion_text(label[band], p, band)
+    return text
+
+
+def run(image, model_title, compare, align, occlude=False):
+    empty = [None, None, gr.update(visible=False), None] * 3
     if image is None:
         return ["사진을 올리거나 웹캠으로 찍어 주세요.", None] + empty
-    face, n = fa.crop_face(image, align=align)
+    face, n, lm = fa.crop_face(image, align=align, return_landmarks=True)
     if face is None:
         return ["얼굴을 찾지 못했습니다. 얼굴이 정면으로 잘 보이는 밝은 사진으로 다시 시도해 주세요.", None] + empty
     names = MODEL_NAMES if compare else [next(k for k, v in TITLES.items() if v == model_title)]
     t0 = time.perf_counter()
+    labels = fr.face_regions(lm)
     out = []
     for name in MODEL_NAMES:
         if name in names:
-            label, cam, _ = predict(face, name)
-            out += [label, cam, gr.update(visible=True, value=f"### {TITLES[name]}")]
+            label, cam, heat = predict(face, name)
+            out += [label, cam, gr.update(visible=True, value=f"### {TITLES[name]}"),
+                    explain(face, labels, name, label, heat, occlude)]
         else:
-            out += [None, None, gr.update(visible=False)]
+            out += [None, None, gr.update(visible=False), None]
     msg = f"얼굴 {n}개 중 가장 큰 얼굴" if n > 1 else "얼굴 1개 검출"
     return [f"{msg} · 처리 {time.perf_counter() - t0:.2f}초 ({DEVICE})", face] + out
 
@@ -111,6 +131,7 @@ def build():
                 model = gr.Radio(list(TITLES.values()), value="작은 CNN", label="모델")
                 compare = gr.Checkbox(False, label="세 모델 비교")
                 align = gr.Checkbox(fa.DEFAULT_ALIGN, label="얼굴 정렬 (두 눈 수평)")
+                occlude = gr.Checkbox(False, label="가림 실험 (영역마다 블러 후 다시 예측)")
                 btn = gr.Button("예측", variant="primary")
             with gr.Column(scale=1):
                 status = gr.Markdown()
@@ -122,9 +143,10 @@ def build():
                     title = gr.Markdown(visible=False)
                     label = gr.Label(num_top_classes=3, label="예측 나이대 (상위 3개)")
                     cam = gr.Image(label="Grad-CAM", interactive=False, height=260)
-                    cols += [label, cam, title]
-        gr.Markdown(f"---\n{NOTICE}")
-        btn.click(run, [inp, model, compare, align], [status, face] + cols)
+                    text = gr.Markdown()
+                    cols += [label, cam, title, text]
+        gr.Markdown(f"{REGION_NOTICE}\n\n---\n{NOTICE}")
+        btn.click(run, [inp, model, compare, align, occlude], [status, face] + cols)
     return demo
 
 
@@ -132,7 +154,7 @@ def build():
 #   ▶ [모듈 4] 점검 (--selftest)
 #   ① val 5장: 앱 predict = gradcam_utils 직접 계산 (확률·히트맵 같음 → 전처리 일치)
 #   ② 합성 사진: val 사진을 넓은 배경(3배 캔버스, 무작위 위치)에 붙여 검출 → 예측. 원본 224 예측과 같은지
-#   ③ 처리 시간: 1280×960 합성 사진 1장, 단일(모델별) / 비교 모드
+#   ③ 처리 시간: 1280×960 합성 사진 1장, 단일(모델별) / 비교 모드 × 가림 실험 끔 / 켬
 # =============================================================================
 
 def selftest(image_root):
@@ -178,16 +200,18 @@ def selftest(image_root):
     im = imgs[0]
     bg = im.resize((1280, 960)).filter(ImageFilter.GaussianBlur(25))
     bg.paste(im.resize((300, 300)), (600, 250))
-    run(bg, "작은 CNN", True, False)                                   # 첫 실행(워밍업) 제외
-    for title in TITLES.values():
+    run(bg, "작은 CNN", True, False, True)                             # 첫 실행(워밍업) 제외
+    print(f"③ 1280×960 사진 1장 처리 시간 ({DEVICE}, 검출 포함, 5번 평균)")
+    for occ in (False, True):
+        for title in TITLES.values():
+            t = time.perf_counter()
+            for _ in range(5):
+                run(bg, title, False, False, occ)
+            print(f"③ {title} 단일, 가림 실험 {'켬' if occ else '끔'}: {(time.perf_counter() - t) / 5:.3f}초")
         t = time.perf_counter()
         for _ in range(5):
-            run(bg, title, False, False)
-        print(f"③ 1280×960 사진, {title} 단일: {(time.perf_counter() - t) / 5:.3f}초 ({DEVICE}, 검출 포함)")
-    t = time.perf_counter()
-    for _ in range(5):
-        run(bg, "작은 CNN", True, False)
-    print(f"③ 세 모델 비교: {(time.perf_counter() - t) / 5:.3f}초")
+            run(bg, "작은 CNN", True, False, occ)
+        print(f"③ 세 모델 비교, 가림 실험 {'켬' if occ else '끔'}: {(time.perf_counter() - t) / 5:.3f}초")
     t = time.perf_counter()
     for _ in range(5):
         fa.crop_face(bg)

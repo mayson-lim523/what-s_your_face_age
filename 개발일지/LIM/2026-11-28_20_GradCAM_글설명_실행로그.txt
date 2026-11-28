@@ -1,0 +1,68 @@
+# 2026-11-28 개발일지 20 실행 로그 (GPU: cuda)
+
+$ .venv\Scripts\python 작은CNN\face_regions.py --image-root C:\3th_project\whats_your_face_age\division_224AFAD-X
+① 5점 좌표 오차 (반환한 224 좌표 vs 224 사진 속 색 점, px — 점 5개 × 사진):
+            mean  median   max  count
+align tilt                           
+False 0     0.82    0.86  1.39     45
+True  0     0.75    0.76  1.30     45
+      15    0.74    0.72  1.54     45
+② 영역 경계 그림: C:\3th_project\what-s_your_face_age\작은CNN\results\face_regions\regions_debug.jpg (줄마다 사진 1장: 정렬 끔 | 정렬 켬 | 15도 기울임+정렬 켬)
+③ 주목 비중 합 = 100% (모든 사진·모델). 영역 면적 비율 평균(히트맵이 고르면 비중 = 면적):
+   이마 9% · 왼쪽 눈가 6% · 오른쪽 눈가 6% · 코 5% · 입 8% · 왼쪽 볼 10% · 오른쪽 볼 10% · 턱 6% · 기타(머리·배경) 40%
+④ 주목 비중 1위 vs 가림 실험 하락 1위:
+      photo         model   band  prob share_top  share_top_pct  mouth_share  occl_top  occl_top_pp  match
+     1(AAF)     small_cnn    10대  41.1    오른쪽 눈가           27.8          5.4        이마         -8.7  False
+     1(AAF) convnext_tiny    20대  57.5 기타(머리·배경)           31.1          1.7        이마        -53.3  False
+     1(AAF)      resnet50    10대  54.3     오른쪽 볼           29.0          8.0        이마        -44.7  False
+     2(AAF)     small_cnn    40대  31.2 기타(머리·배경)           18.9          9.4     오른쪽 볼        -17.3  False
+     2(AAF) convnext_tiny    50대  55.9         입           33.5         33.5         입        -31.4   True
+     2(AAF)      resnet50    40대  49.0         입           35.1         35.1         코        -34.9  False
+     3(AAF)     small_cnn    20대  53.8 기타(머리·배경)           25.7         12.4         입        -12.0  False
+     3(AAF) convnext_tiny    20대  77.1     왼쪽 눈가           32.4         11.0 기타(머리·배경)        -21.4  False
+     3(AAF)      resnet50    20대  71.7    오른쪽 눈가           20.3         11.0         입        -18.4  False
+4(FairFace)     small_cnn    10대  39.7 기타(머리·배경)           25.3          4.7     왼쪽 눈가        -10.0  False
+4(FairFace) convnext_tiny   0-9세  50.2      왼쪽 볼           45.2          1.9     왼쪽 눈가        -49.5  False
+4(FairFace)      resnet50    10대  65.6      왼쪽 볼           31.8         20.3    오른쪽 눈가        -53.3  False
+5(FairFace)     small_cnn    30대  24.5 기타(머리·배경)           43.7         11.7     오른쪽 볼         -5.9  False
+5(FairFace) convnext_tiny    40대  52.3         입           33.7         33.7     오른쪽 볼        -37.1  False
+5(FairFace)      resnet50    30대  65.2         입           28.8         28.8         턱        -23.6  False
+6(FairFace)     small_cnn    30대  31.2 기타(머리·배경)           34.3          9.7        이마         -6.5  False
+6(FairFace) convnext_tiny    20대  56.1 기타(머리·배경)           21.1         19.0 기타(머리·배경)        -21.7   True
+6(FairFace)      resnet50    20대  60.1         입           26.8         26.8 기타(머리·배경)        -16.2  False
+ 7(UTKFace)     small_cnn 60세 이상  62.0         입           24.5         24.5         입        -30.5   True
+ 7(UTKFace) convnext_tiny 60세 이상  99.3         입           41.5         41.5      왼쪽 볼         -8.2  False
+ 7(UTKFace)      resnet50 60세 이상  99.9         입           22.1         22.1         입        -74.9   True
+ 8(UTKFace)     small_cnn    10대  21.2     왼쪽 눈가           20.5          4.5    오른쪽 눈가         -6.3  False
+ 8(UTKFace) convnext_tiny   0-9세  77.3    오른쪽 눈가           20.9         16.8      왼쪽 볼        -40.2  False
+ 8(UTKFace)      resnet50   0-9세  59.8    오른쪽 눈가           32.2          7.9        이마        -21.2  False
+ 9(UTKFace)     small_cnn    40대  29.3    오른쪽 눈가           22.6         14.1      왼쪽 볼        -13.8  False
+ 9(UTKFace) convnext_tiny    40대  56.1         입           26.3         26.3      왼쪽 볼        -16.5  False
+ 9(UTKFace)      resnet50    40대  50.3         입           32.4         32.4      왼쪽 볼        -25.0  False
+               일치  사진  입비중평균
+model                       
+convnext_tiny   2   9   20.6
+resnet50        1   9   21.4
+small_cnn       1   9   10.7
+
+$ .venv\Scripts\python 작은CNN\app_gradio.py --selftest --image-root C:\3th_project\whats_your_face_age\division_224AFAD-X
+① small_cnn: val 5장 직접 계산과 비교 — 확률 최대 차이 3.0e-08, 히트맵 최대 차이 0.0e+00
+① convnext_tiny: val 5장 직접 계산과 비교 — 확률 최대 차이 1.5e-07, 히트맵 최대 차이 9.8e-07
+① resnet50: val 5장 직접 계산과 비교 — 확률 최대 차이 4.2e-07, 히트맵 최대 차이 2.1e-06
+② 합성 사진(672×672 흐린 배경 + 224 얼굴) 30장: 검출 30장. 1위가 원본 224 예측과 같음 / ±1 나이대 안:
+   작은 CNN: 13/30, 24/30
+   ConvNeXt-Tiny: 24/30, 29/30
+   ResNet-50: 20/30, 26/30
+③ 1280×960 사진 1장 처리 시간 (cuda, 검출 포함, 5번 평균)
+③ 작은 CNN 단일, 가림 실험 끔: 0.041초
+③ ConvNeXt-Tiny 단일, 가림 실험 끔: 0.075초
+③ ResNet-50 단일, 가림 실험 끔: 0.064초
+③ 세 모델 비교, 가림 실험 끔: 0.123초
+③ 작은 CNN 단일, 가림 실험 켬: 0.056초
+③ ConvNeXt-Tiny 단일, 가림 실험 켬: 0.114초
+③ ResNet-50 단일, 가림 실험 켬: 0.110초
+③ 세 모델 비교, 가림 실험 켬: 0.225초
+   (그중 얼굴 검출·자르기만: 0.023초)
+
+$ .venv\Scripts\python 작은CNN\face_align.py
+20도 기울인 사진: 검출 기울기 -29.1도 → 정렬 후 6.7도, 빈 사진 None, 점검 통과
