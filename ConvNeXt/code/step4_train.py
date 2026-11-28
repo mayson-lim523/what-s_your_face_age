@@ -10,6 +10,8 @@ python step4_train.py --name base_resnet50 --model resnet50 \
   --train-mode   full(전체 미세조정, 기본) / head(마지막 층만 학습)
   --lr           몸통 학습률 (기본 0.0001). 새 출력층은 이 값의 10배
   --no-augment   증강 끄기
+  --blur-aug     흐림 증강(초점 흐림·저해상도) 추가
+  --paste-aug P  얼굴 붙이기 증강(다른 얼굴을 구석에 작게 붙임)을 확률 P로 추가 (예: 0.3)
   --no-class-weight  나이대별 손실 가중치 끄기
   --epochs 20 --patience 4 --batch-size 64
   --resume       끊긴 학습 이어하기 (results/<name>/last.pt 사용)
@@ -29,7 +31,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from common import NUM_CLASSES, FaceDataset, build_model, build_transforms, compute_metrics
+from common import BANDS, NUM_CLASSES, FaceDataset, build_model, build_transforms, compute_metrics
 
 
 def set_trainable(model, head_only: bool):
@@ -78,6 +80,8 @@ def main():
     ap.add_argument("--batch-size", type=int, default=64)
     ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--no-augment", action="store_true")
+    ap.add_argument("--blur-aug", action="store_true", help="학습 증강에 흐림 증강(초점 흐림·저해상도) 추가")
+    ap.add_argument("--paste-aug", type=float, default=0.0, help="얼굴 붙이기 증강 확률 (0이면 끔, 예: 0.3)")
     ap.add_argument("--no-class-weight", action="store_true")
     ap.add_argument("--no-pretrained", action="store_true")
     ap.add_argument("--exclude-source", default="", help="예: aaf,afad")
@@ -95,12 +99,25 @@ def main():
     print(f"장치: {device} | 실험: {a.name}")
 
     tr_df, va_df = pd.read_csv(a.train_csv), pd.read_csv(a.val_csv)
+    mx = int(max(tr_df["band"].max(), va_df["band"].max()))
+    if mx >= NUM_CLASSES:
+        raise SystemExit(f"정답 번호({mx})가 클래스 수({NUM_CLASSES})보다 큽니다. 7개 나이대 CSV라면 'set AGE_GROUPS=7'로 바꾸세요.")
+    if NUM_CLASSES == 7 and mx <= 2:
+        raise SystemExit("3그룹 CSV로 보입니다. 먼저 cmd에서 'set AGE_GROUPS=3'을 실행하세요.")
+    print(f"클래스 {NUM_CLASSES}개: {', '.join(BANDS)}")
     if a.exclude_source:
         drop = a.exclude_source.split(",")
         tr_df = tr_df[~tr_df["source"].isin(drop)]  # 학습에서만 빼고, 검증은 그대로 두어 공정하게 비교
     print(f"학습 {len(tr_df):,}장 / 검증 {len(va_df):,}장")
 
-    tr_ds = FaceDataset(tr_df, a.image_root, build_transforms(train=True, augment=not a.no_augment))
+    import os as _os
+    tr_paths = [_os.path.join(a.image_root, p) for p in tr_df["path"]]
+    tr_ds = FaceDataset(tr_df, a.image_root, build_transforms(train=True, augment=not a.no_augment, blur=a.blur_aug,
+                                                              paste_paths=tr_paths, paste_p=a.paste_aug))
+    if a.paste_aug > 0 and not a.no_augment:
+        print(f"얼굴 붙이기 증강 사용: 확률 {a.paste_aug:.0%}")
+    if a.blur_aug and not a.no_augment:
+        print("흐림 증강 사용: 초점 흐림 20%, 저해상도 20%")
     va_ds = FaceDataset(va_df, a.image_root, build_transforms(train=False))
     tr_dl = DataLoader(tr_ds, a.batch_size, shuffle=True, num_workers=a.workers, pin_memory=True, drop_last=True)
     va_dl = DataLoader(va_ds, a.batch_size * 2, shuffle=False, num_workers=a.workers, pin_memory=True)
@@ -163,7 +180,7 @@ def main():
 
         if va_m["macro_f1"] > best_f1:
             best_f1, bad = va_m["macro_f1"], 0
-            torch.save({"model": model.state_dict(), "model_name": a.model, "epoch": epoch + 1}, best_path)
+            torch.save({"model": model.state_dict(), "model_name": a.model, "epoch": epoch + 1, "num_classes": NUM_CLASSES}, best_path)
             print("  → 가장 좋은 모델 저장")
         else:
             bad += 1

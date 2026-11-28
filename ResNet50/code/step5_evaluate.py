@@ -80,6 +80,9 @@ def evaluate(a):
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     ck = torch.load(os.path.join(a.exp_dir, "best.pt"), map_location=device, weights_only=False)
+    nc = ck.get("num_classes", 7)
+    if nc != NUM_CLASSES:
+        raise SystemExit(f"이 모델은 클래스 {nc}개인데 지금 설정은 {NUM_CLASSES}개입니다. cmd에서 'set AGE_GROUPS={nc}'을 먼저 실행하세요.")
     model = build_model(ck["model_name"], pretrained=False).to(device)
     model.load_state_dict(ck["model"]); model.eval()
 
