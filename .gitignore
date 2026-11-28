@@ -1,3 +1,4 @@
 weights/
 *.pt
 *.pth
+!작은CNN/results/**/*.pth
