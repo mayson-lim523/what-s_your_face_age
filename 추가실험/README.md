@@ -85,6 +85,8 @@ set AGE_GROUPS=7
 
 **7개 vs 3개 (ConvNeXt)**: 정확도 58.6% → 88.2%, macro-F1 0.592 → 0.830
 
+![3그룹 그래프](images/11_chart_3group.png)
+
 ### 해석
 - **묶어 채점 ≈ 다시 학습**: 87.9% vs 88.2%로 거의 같다. 7개 모델 하나로 두 용도를 다 쓸 수 있다.
 - **오류는 경계에서만** (3그룹 학습 모델): 소아청소년↔성인 953장, 성인↔노인 669장, 소아청소년↔노인 5장. 7개 분류에서 틀린 것 대부분이 바로 옆 나이대였기 때문에, 크게 묶으면 그 오류가 사라진다.
@@ -152,6 +154,8 @@ python eval_blur.py --exp-dirs results/v2_convnext results/v2_convnext_blur --sp
 
 원래부터 흐린 실제 사진(선명도 1구간) 정확도: 54.9% → 55.0%
 
+![흐린 사진 그래프](images/12_chart_blur.png)
+
 ![흐림 평가](images/07_blur_eval.png)
 
 ### 해석
@@ -199,6 +203,8 @@ python eval_paste.py --exp-dirs results/v2_convnext results/v2_convnext_paste --
 | 붙임 + 가리기 | 0.561 | 0.574 |
 
 얼굴 붙인 사진의 정확도 56.1% → 57.9%, 한 칸 차이 정확도 92.7% → 93.7%
+
+![여러 얼굴 그래프](images/13_chart_paste.png)
 
 ![최종 평가](images/10_paste_eval_final.png)
 
