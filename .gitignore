@@ -3,3 +3,4 @@ weights/
 *.pth
 !작은CNN/results/**/*.pth
 .venv/
+작은CNN/results/no_aug/*.pth

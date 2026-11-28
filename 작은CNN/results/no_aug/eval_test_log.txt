@@ -1,0 +1,18 @@
+using device: cuda
+CSV: splits_csv_v2\test.csv | image-root: division_224AFAD-X
+사진 수: 13789
+가중치: results/no_aug/small_cnn_best.pth
+
+전체: acc 0.4747 | off1_acc 0.8507 | macro_f1 0.4747 | n 13789
+
+나이대별 정확도(= 재현율):
+     0-9세: 0.746  (2447장)
+      10대: 0.470  (1780장)
+      20대: 0.431  (2357장)
+      30대: 0.325  (2357장)
+      40대: 0.366  (2259장)
+      50대: 0.377  (1453장)
+   60세 이상: 0.641  (1136장)
+
+오답 7244장 중 옆 나이대(1칸) 오답: 5185장 (71.6%)
+결과 저장: results/no_aug/eval_test

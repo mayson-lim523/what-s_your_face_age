@@ -115,6 +115,7 @@ def parse_args():                                        # 옵션을 읽어서 �
     p.add_argument("--out-dir", default="results/small_cnn_main/eval_val")           # 결과 저장 폴더
     p.add_argument("--csv-dir", default=None)            # 주면 이 폴더의 val.csv로 평가 (예: splits_csv_v2) / 안 주면 --data-dir 폴더 방식
     p.add_argument("--image-root", default=None)         # CSV path의 기준 폴더 (예: division_224AFAD-X). --csv-dir와 함께 사용
+    p.add_argument("--split", default="val", choices=["val", "test"])   # CSV 모드에서 읽을 CSV (test는 최종 평가 때만 1회)
     p.add_argument("--workers", type=int, default=0)     # (type=정수로 변환) DataLoader 병렬 프로세스 수. 0 = 메인 프로세스만
     return p.parse_args()                                # 실제 명령줄을 읽어 args.weights, args.data_dir ... 로 돌려줌 (- 는 _ 로 바뀜)
 
@@ -169,7 +170,7 @@ if __name__ == "__main__":
     if args.csv_dir:                                     # CSV 모드 (v2): 라벨은 CSV의 band 열
         if not args.image_root:                          # path 기준 폴더가 없으면 사진을 못 찾음
             raise SystemExit("--csv-dir 를 쓰면 --image-root 도 주어야 합니다.")
-        val_csv = os.path.join(args.csv_dir, "val.csv")  # 검증 CSV 경로
+        val_csv = os.path.join(args.csv_dir, f"{args.split}.csv")  # 평가 CSV 경로 (기본 val.csv)
         val_dataset = CSVImageDataset(val_csv, args.image_root, val_transform)   # (CSV, 기준 폴더, transform)
         print("CSV:", val_csv, "| image-root:", args.image_root)
     else:                                                # 기존 폴더 모드: 하위 폴더 이름 순서로 0~6 번호

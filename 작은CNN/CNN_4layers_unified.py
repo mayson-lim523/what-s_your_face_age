@@ -325,6 +325,7 @@ if __name__ == "__main__":
     val_ds = FaceCSVDataset(val_csv, val_dir, val_transform)        # 검증 (예전 15,288장 / v2 13,790장)
     print("CSV:", train_csv, "/", val_csv, "| image-root:", args.image_root or f"{DATA_DIR}/training, {DATA_DIR}/validation")
     print("증강:", "끔" if args.no_augment or args.subset else "켬")   # subset 모드는 아래에서 증강을 끔
+    print("학습 transform:", tr_tf)                      # 실제 적용되는 학습 전처리 (--no-augment면 Resize·ToTensor·Normalize만)
     if args.subset:                                     # 과적합 점검 모드
         g = torch.Generator().manual_seed(SEED)         # 부분집합 뽑기 전용 난수 (매번 같은 N장)
         train_idx = torch.randperm(len(train_ds), generator=g)[:args.subset].tolist()   # 학습에서 무작위 N개 번호
